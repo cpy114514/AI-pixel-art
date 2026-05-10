@@ -12,9 +12,20 @@ if errorlevel 1 (
   exit /b 1
 )
 
+if not exist ".env.local" (
+  if exist ".env.example" (
+    copy ".env.example" ".env.local" >nul
+    echo Created .env.local from .env.example.
+  )
+)
+
 if not exist "node_modules" (
   echo Installing dependencies...
-  call npm install
+  if exist "package-lock.json" (
+    call npm ci
+  ) else (
+    call npm install
+  )
   if errorlevel 1 (
     echo Dependency installation failed.
     pause

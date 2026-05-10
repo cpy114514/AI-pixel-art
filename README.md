@@ -17,18 +17,29 @@ AI Pixel Painter is a Next.js + TypeScript pixel-art sprite editor for AI-assist
 
 ## Quick Start
 
-### Windows one-click start
+### Windows one-click install
 
 1. Install Node.js from <https://nodejs.org/>.
 2. Download this repository as a ZIP from GitHub.
 3. Extract the ZIP.
-4. Double-click `start.bat`.
+4. Double-click `install.bat`.
 
-The script installs dependencies the first time and opens:
+The installer:
+
+- installs dependencies
+- creates `.env.local` from `.env.example` when needed
+- creates a desktop shortcut named `AI Pixel Painter`
+- starts the app
+
+After setup, launch the app with the desktop shortcut or by double-clicking `start.bat`.
+
+The app opens at:
 
 ```text
 http://127.0.0.1:3000
 ```
+
+If Node.js is not installed, `install.bat` can try to install Node.js LTS with Windows `winget`. If `winget` is not available, it opens the Node.js download page.
 
 ### Command line
 
