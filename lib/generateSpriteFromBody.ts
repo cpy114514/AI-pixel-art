@@ -45,29 +45,88 @@ function getFetchErrorDetails(error: unknown, apiUrl: string) {
 function buildStyleGuidance(stylePreset?: string) {
   switch (stylePreset) {
     case "GBA RPG sprite":
-      return "GBA RPG: saturated palette, dark outline, top-left light, 3-4 shade ramps, compact readable proportions.";
+      return "GBA RPG: saturated palette, dark readable outline, top-left light, 3-4 shade ramps per material, compact proportions, readable at 1x.";
     case "NES limited palette":
-      return "NES: very few strong colors, high contrast, bold silhouette, simple clusters, no noisy dithering.";
+      return "NES: very few strong colors, high contrast, bold silhouette, simple clusters, strong shape language, no noisy dithering.";
     case "Cute mobile game":
-      return "Cute mobile: rounded silhouette, expressive face, soft ramps, glossy highlights, friendly proportions.";
+      return "Cute mobile: rounded silhouette, expressive face, soft ramps, glossy highlights, friendly proportions, clean toy-like clusters.";
     case "Dark fantasy item":
-      return "Dark fantasy: strong outline, metal/magic accents, dramatic shadows, rim highlights, sharp readable details.";
+      return "Dark fantasy: strong outline, metal/magic accents, dramatic shadows, rim highlights, sharp readable details, restrained glow pixels.";
     case "High contrast icon":
-      return "High contrast icon: bold outline, large clean shapes, strong separation, minimal noise.";
+      return "High contrast icon: bold outline, large clean shapes, strong foreground/background separation, minimal noise, instantly recognizable silhouette.";
     default:
-      return "Modern game sprite: readable silhouette, crisp outline, clean clusters, tasteful color ramps, controlled highlights.";
+      return "Modern game sprite: readable silhouette, crisp outline, clean clusters, tasteful color ramps, controlled highlights, polished indie-game finish.";
   }
 }
 
 function getPaletteGuidance(width: number, height: number) {
   const pixels = width * height;
   if (pixels <= 64) {
-    return "Palette: transparent plus 5-8 visible #RRGGBB colors.";
+    return "Palette target: transparent plus 5-8 visible #RRGGBB colors. Use one dark outline, one shadow, one midtone, one highlight, and one accent when possible.";
   }
   if (pixels <= 256) {
-    return "Palette: transparent plus 7-12 visible #RRGGBB colors.";
+    return "Palette target: transparent plus 7-12 visible #RRGGBB colors. Build 2-3 color ramps, reuse colors consistently, and add small accent colors only where they improve readability.";
   }
-  return "Palette: transparent plus 10-18 visible #RRGGBB colors, reusing colors consistently.";
+  return "Palette target: transparent plus 10-18 visible #RRGGBB colors. Build distinct ramps for major materials, reuse colors consistently, and avoid one-color or random-color output.";
+}
+
+function getCanvasQualityGuidance(width: number, height: number) {
+  const longestSide = Math.max(width, height);
+
+  if (longestSide <= 8) {
+    return [
+      "8px quality target: iconic silhouette first; every visible pixel must contribute to shape, face, shine, or shadow.",
+      "Use chunky readable clusters and avoid tiny noisy details.",
+    ].join(" ");
+  }
+
+  if (longestSide <= 16) {
+    return [
+      "16px quality target: strong readable outline, clear face or feature marks, 2-3 shade clusters, and recognizable pose/item shape.",
+      "Do not leave the subject as a flat blob; add edge shadow, highlight pixels, and interior detail.",
+    ].join(" ");
+  }
+
+  if (longestSide <= 32) {
+    return [
+      "32px quality target: use the full resolution, not a doubled 16px sprite.",
+      "Add secondary forms, anti-jagged stair-step clusters, material details, ambient shadow pixels, and highlights while keeping clusters clean.",
+    ].join(" ");
+  }
+
+  return [
+    "Large canvas quality target: use the full resolution with deliberate pixel clusters, readable small details, material texture, and clean contours.",
+    "Do not upscale a smaller sprite into repeated 2x2 or 4x4 blocks.",
+  ].join(" ");
+}
+
+function getStrictJsonGuidance(width: number, height: number) {
+  return [
+    `Return exactly width=${width}, height=${height}.`,
+    `pixels must contain exactly ${height} rows, and every row must contain exactly ${width} strings.`,
+    "Every cell is one pixel color. Do not compress rows, omit trailing transparent cells, use ellipses, or return a smaller sprite.",
+    "Use only #RRGGBB or transparent. No color names except transparent.",
+    'Output only JSON with exactly these keys: {"width":number,"height":number,"pixels":[["#RRGGBB","transparent"]]}',
+    "No markdown, no comments, no explanations, no extra keys.",
+  ].join("\n");
+}
+
+function getPixelArtQualityRules(width: number, height: number, hasReferenceImage = false) {
+  return [
+    getCanvasQualityGuidance(width, height),
+    getPaletteGuidance(width, height),
+    "Composition: one centered isolated game asset on transparent background unless the request explicitly asks for a background.",
+    "Silhouette: readable at 1x with a clear outer contour; use a 1px dark outline or strong edge contrast where useful.",
+    "Lighting: consistent top-left light; place shadows on lower-right areas and highlights on upper-left planes.",
+    "Pixel technique: use intentional clusters, clean ramps, selective single-pixel highlights, and small hue shifts between light and shadow.",
+    "Avoid: flat single-color fills, simple geometric placeholders, blurry gradients, pillow shading, random noise, banding, text labels, UI elements, watermark-like marks.",
+    "Anti-upscale rule: each requested pixel is real detail. Never make a smaller sprite and scale it by repeating blocks.",
+    hasReferenceImage
+      ? "Reference rule: preserve the main subject, pose, proportions, key colors, and iconic details; simplify into pixel clusters instead of tracing noise."
+      : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 function getTokenBudget(width: number, height: number) {
@@ -90,20 +149,16 @@ function buildSpriteInstruction(
   const displayHeight = finalHeight ?? targetHeight;
 
   return [
-    "Create one polished pixel-art game sprite as strict JSON.",
+    "Create one polished production-ready pixel-art game sprite as strict JSON.",
     `Canvas and JSON size: ${displayWidth}x${displayHeight}.`,
-    `Return exactly width=${targetWidth}, height=${targetHeight}, pixels has exactly ${targetHeight} rows, each row exactly ${targetWidth} strings.`,
     "Ignore any size written in the user request if it conflicts with this exact size.",
     `Style: ${buildStyleGuidance(stylePreset)}`,
     `Request: ${prompt}`,
     hasReferenceImage
       ? "Reference image attached: preserve the main subject, silhouette, pose, key colors, and recognizable details; remove/transparent the background unless requested."
       : "",
-    getPaletteGuidance(targetWidth, targetHeight),
-    "Pixel-art rules: centered subject, clear 1px readable silhouette/outline where useful, top-left light, shadow side, highlights, interior detail clusters.",
-    "Avoid: flat single-color fills, blurry gradients, pillow shading, random noise, text labels, UI, backgrounds unless requested.",
-    'Output only JSON with exactly these keys: {"width":number,"height":number,"pixels":[["#RRGGBB","transparent"]]}',
-    "Use only #RRGGBB or transparent. No markdown, no comments, no ellipses, no extra keys.",
+    getPixelArtQualityRules(targetWidth, targetHeight, hasReferenceImage),
+    getStrictJsonGuidance(targetWidth, targetHeight),
   ]
     .filter(Boolean)
     .join("\n");
@@ -115,17 +170,17 @@ function buildSpriteEditInstruction(
   stylePreset?: string,
 ) {
   return [
-    "Edit the existing pixel-art sprite as strict JSON.",
+    "Edit the existing pixel-art sprite as strict JSON. Return the complete final sprite, not a patch.",
     `Canvas and JSON size: ${currentSprite.width}x${currentSprite.height}.`,
-    `Return exactly width=${currentSprite.width}, height=${currentSprite.height}, pixels has exactly ${currentSprite.height} rows, each row exactly ${currentSprite.width} strings.`,
     `Edit request: ${editInstruction}`,
     `Style to preserve: ${buildStyleGuidance(stylePreset)}`,
+    getPixelArtQualityRules(currentSprite.width, currentSprite.height),
     "Current sprite JSON:",
     JSON.stringify(currentSprite),
     "Rules: change only the pixels needed for the edit; preserve the subject, pose, palette style, outline, lighting, and all unrelated regions.",
-    "For local edits like smaller ears, different eyes, color tweaks, or item changes, modify that region and blend it cleanly with neighboring pixels.",
-    'Output only the complete final sprite JSON with exactly these keys: {"width":number,"height":number,"pixels":[["#RRGGBB","transparent"]]}',
-    "Use only #RRGGBB or transparent. No markdown, no patch format, no comments, no extra keys.",
+    "For local edits like smaller ears, different eyes, color tweaks, or item changes, modify that region and blend it cleanly with neighboring pixels; do not redraw unrelated areas.",
+    "If the existing sprite is too plain, improve only where it supports the requested edit: add cleaner outline, highlight, shadow, and detail without changing identity.",
+    getStrictJsonGuidance(currentSprite.width, currentSprite.height),
   ].join("\n");
 }
 
@@ -136,16 +191,18 @@ function buildSpriteAnimationInstruction(
   frameCount: number,
 ) {
   return [
-    "Create a pixel-art animation as strict JSON.",
+    "Create a polished pixel-art animation as strict JSON.",
     `Canvas size for every frame: ${currentSprite.width}x${currentSprite.height}.`,
     `Return exactly ${frameCount} frames in {"frames":[...]}.`,
     "Frame 1 starts from the provided current sprite. Keep it as the first pose.",
     `Animation request: ${animationInstruction}`,
     `Style to preserve: ${buildStyleGuidance(stylePreset)}`,
+    getPixelArtQualityRules(currentSprite.width, currentSprite.height),
     "Current frame JSON:",
     JSON.stringify(currentSprite),
     "Rules: every frame must use the same size, palette style, outline style, lighting direction, and transparent background behavior.",
-    "Animate by changing only the pixels needed for motion. Keep the subject identity stable across frames.",
+    "Animate by changing only the pixels needed for motion. Keep the subject identity stable across frames and avoid flickering outlines or random color shifts.",
+    "Motion quality: use small readable pose changes, squash/stretch only when appropriate, and keep the anchor position stable unless movement is requested.",
     'Output only JSON with exactly this shape: {"frames":[{"width":number,"height":number,"pixels":[["#RRGGBB","transparent"]]}]}',
     "Use only #RRGGBB or transparent. No markdown, no comments, no ellipses, no extra keys.",
   ].join("\n");
@@ -205,12 +262,13 @@ function buildUpstreamBody(
       model: model || "gpt-4.1-mini",
       stream: false,
       response_format: { type: "json_object" },
-      temperature: 0.45,
+      temperature: 0.35,
       max_completion_tokens: maxTokens,
       messages: [
         {
           role: "system",
-          content: "You are a fast pixel-sprite JSON generator. Return only strict valid JSON.",
+          content:
+            "You are an expert pixel artist and strict JSON generator for game sprites. Prioritize readable silhouettes, clean pixel clusters, consistent palettes, exact canvas size, and valid JSON only.",
         },
         {
           role: "user",

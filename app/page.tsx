@@ -642,7 +642,7 @@ export default function Home() {
   ]);
   const [activeFrameIndex, setActiveFrameIndex] = useState(0);
   const [prompt, setPrompt] = useState(
-    "Draw a 16x16 blue slime game sprite with outline, highlights, shadows, face details, and multiple blue shades.",
+    "Draw a polished blue slime game sprite with a clear silhouette, dark outline, glossy top-left highlight, soft lower-right shadow, expressive face, and several blue color ramps.",
   );
   const [stylePreset, setStylePreset] = useState<(typeof stylePresets)[number]>(
     "Modern game sprite",
@@ -1725,4 +1725,3 @@ export default function Home() {
     </main>
   );
 }
-
