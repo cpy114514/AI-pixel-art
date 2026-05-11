@@ -97,13 +97,8 @@
         font-weight: 700;
       }
 
-      body[data-error] .status::before {
-        content: attr(data-error);
+      body[data-error] .status {
         color: #fda4af;
-      }
-
-      body:not([data-error]) .status::before {
-        content: "Starting local canvas engine...";
       }
 
       .bar {
@@ -168,8 +163,14 @@
         <span class="pixel"></span>
       </div>
       <h1>AI Pixel Art</h1>
-      <div class="status"></div>
+      <div class="status" id="status">Starting local canvas engine...</div>
       <div class="bar" aria-hidden="true"></div>
     </main>
+    <script>
+      window.setStartupStatus = function setStartupStatus(message, isError) {
+        document.body.toggleAttribute("data-error", Boolean(isError));
+        document.getElementById("status").textContent = message;
+      };
+    </script>
   </body>
 </html>
