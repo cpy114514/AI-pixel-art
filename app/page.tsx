@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  ChevronDown,
+  ChevronUp,
   Copy,
   Download,
   Film,
@@ -752,6 +754,7 @@ export default function Home() {
   const [presetName, setPresetName] = useState("");
   const [selectedLocalPresetId, setSelectedLocalPresetId] = useState("");
   const [newClodModel, setNewClodModel] = useState("");
+  const [isApiPanelOpen, setIsApiPanelOpen] = useState(true);
   const [editInstruction, setEditInstruction] = useState("");
   const [animationFrameCount, setAnimationFrameCount] = useState("4");
   const [animationDescription, setAnimationDescription] = useState("");
@@ -1540,6 +1543,8 @@ export default function Home() {
     warning: "border-amber-200 bg-amber-50 text-amber-800",
     error: "border-rose-200 bg-rose-50 text-rose-800",
   }[status.type];
+  const selectedProviderName =
+    providerPresets.find((provider) => provider.id === selectedProvider)?.name ?? "Custom API";
 
   return (
     <main className="min-h-screen bg-[#f6f8fb] text-slate-950">
@@ -1673,52 +1678,80 @@ export default function Home() {
 
           <aside className="flex min-h-0 flex-col gap-4 overflow-auto rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
             <section className="space-y-3">
-              <div className="flex items-center gap-2">
-                <KeyRound className="h-4 w-4 text-cyan-600" />
-                <h2 className="text-sm font-bold text-slate-900">API connection</h2>
-              </div>
-              <label className="block space-y-1" htmlFor="provider-preset">
-                <span className="text-xs font-bold uppercase text-slate-500">Provider</span>
-                <select
-                  id="provider-preset"
-                  className="h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-800 outline-none focus:border-cyan-400 focus:ring-2 focus:ring-cyan-100"
-                  onChange={(event) => handleProviderChange(event.target.value as ProviderPresetId)}
-                  value={selectedProvider}
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex min-w-0 items-center gap-2">
+                  <KeyRound className="h-4 w-4 shrink-0 text-cyan-600" />
+                  <div className="min-w-0">
+                    <h2 className="text-sm font-bold text-slate-900">API connection</h2>
+                    {!isApiPanelOpen ? (
+                      <div className="mt-0.5 truncate text-xs text-slate-500">
+                        {selectedProviderName}
+                        {apiModel ? ` · ${apiModel}` : ""}
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+                <button
+                  aria-expanded={isApiPanelOpen}
+                  aria-label={isApiPanelOpen ? "Hide API connection" : "Show API connection"}
+                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                  onClick={() => setIsApiPanelOpen((current) => !current)}
+                  title={isApiPanelOpen ? "Hide API connection" : "Show API connection"}
+                  type="button"
                 >
-                  {providerPresets.map((provider) => (
-                    <option key={provider.id} value={provider.id}>
-                      {provider.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="block space-y-1">
-                <span className="text-xs font-bold uppercase text-slate-500">API URL</span>
-                <input
-                  className="h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-xs text-slate-800 outline-none focus:border-cyan-400 focus:ring-2 focus:ring-cyan-100"
-                  onChange={(event) =>
-                    setLocalState((current) => ({ ...current, apiUrl: event.target.value }))
-                  }
-                  placeholder="https://your-api.example.com/generate"
-                  type="url"
-                  value={apiUrl}
-                />
-              </label>
-              <label className="block space-y-1">
-                <span className="text-xs font-bold uppercase text-slate-500">API Key</span>
-                <input
-                  className="h-9 w-full rounded-md border border-slate-200 bg-white px-3 font-mono text-xs text-slate-800 outline-none focus:border-cyan-400 focus:ring-2 focus:ring-cyan-100"
-                  onChange={(event) =>
-                    setLocalState((current) => ({ ...current, apiKey: event.target.value }))
-                  }
-                  placeholder="Paste API key here"
-                  type="text"
-                  value={apiKey}
-                />
-              </label>
-              <label className="block space-y-1">
-                <span className="text-xs font-bold uppercase text-slate-500">Model</span>
-                {selectedProvider === "clod" ? (
+                  {isApiPanelOpen ? (
+                    <ChevronUp className="h-4 w-4" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4" />
+                  )}
+                </button>
+              </div>
+              {isApiPanelOpen ? (
+                <div className="space-y-3">
+                  <label className="block space-y-1" htmlFor="provider-preset">
+                    <span className="text-xs font-bold uppercase text-slate-500">Provider</span>
+                    <select
+                      id="provider-preset"
+                      className="h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-800 outline-none focus:border-cyan-400 focus:ring-2 focus:ring-cyan-100"
+                      onChange={(event) =>
+                        handleProviderChange(event.target.value as ProviderPresetId)
+                      }
+                      value={selectedProvider}
+                    >
+                      {providerPresets.map((provider) => (
+                        <option key={provider.id} value={provider.id}>
+                          {provider.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="block space-y-1">
+                    <span className="text-xs font-bold uppercase text-slate-500">API URL</span>
+                    <input
+                      className="h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-xs text-slate-800 outline-none focus:border-cyan-400 focus:ring-2 focus:ring-cyan-100"
+                      onChange={(event) =>
+                        setLocalState((current) => ({ ...current, apiUrl: event.target.value }))
+                      }
+                      placeholder="https://your-api.example.com/generate"
+                      type="url"
+                      value={apiUrl}
+                    />
+                  </label>
+                  <label className="block space-y-1">
+                    <span className="text-xs font-bold uppercase text-slate-500">API Key</span>
+                    <input
+                      className="h-9 w-full rounded-md border border-slate-200 bg-white px-3 font-mono text-xs text-slate-800 outline-none focus:border-cyan-400 focus:ring-2 focus:ring-cyan-100"
+                      onChange={(event) =>
+                        setLocalState((current) => ({ ...current, apiKey: event.target.value }))
+                      }
+                      placeholder="Paste API key here"
+                      type="text"
+                      value={apiKey}
+                    />
+                  </label>
+                  <label className="block space-y-1">
+                    <span className="text-xs font-bold uppercase text-slate-500">Model</span>
+                    {selectedProvider === "clod" ? (
                   <select
                     className="h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-800 outline-none focus:border-cyan-400 focus:ring-2 focus:ring-cyan-100"
                     onChange={(event) =>
@@ -1732,7 +1765,7 @@ export default function Home() {
                       </option>
                     ))}
                   </select>
-                ) : (
+                    ) : (
                   <input
                     className="h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-xs text-slate-800 outline-none focus:border-cyan-400 focus:ring-2 focus:ring-cyan-100"
                     onChange={(event) =>
@@ -1742,47 +1775,47 @@ export default function Home() {
                     type="text"
                     value={apiModel}
                   />
-                )}
-              </label>
-              {selectedProvider === "clod" ? (
-                <div className="space-y-2 rounded-md border border-slate-200 bg-slate-50 p-3">
-                  <div className="text-xs font-bold uppercase text-slate-500">CLÅD models</div>
-                  <input
-                    className="h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-xs text-slate-800 outline-none focus:border-cyan-400 focus:ring-2 focus:ring-cyan-100"
-                    onChange={(event) => setNewClodModel(event.target.value)}
-                    placeholder="Paste model name from app.clod.io/user/models"
-                    type="text"
-                    value={newClodModel}
-                  />
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      className="h-9 rounded-md border border-cyan-200 bg-cyan-50 px-3 text-sm font-bold text-cyan-700 hover:bg-cyan-100"
-                      onClick={handleAddClodModel}
-                      type="button"
-                    >
-                      Add model
-                    </button>
-                    <button
-                      className="h-9 rounded-md border border-slate-200 bg-white px-3 text-sm font-bold text-slate-600 hover:bg-slate-50"
-                      onClick={() => {
-                        setLocalState((current) => ({
-                          ...current,
-                          clodModels: [...defaultClodModels],
-                          apiModel: defaultClodModels[0],
-                        }));
-                      }}
-                      type="button"
-                    >
-                      Reset
-                    </button>
+                    )}
+                  </label>
+                  {selectedProvider === "clod" ? (
+                    <div className="space-y-2 rounded-md border border-slate-200 bg-slate-50 p-3">
+                      <div className="text-xs font-bold uppercase text-slate-500">CLÅD models</div>
+                      <input
+                        className="h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-xs text-slate-800 outline-none focus:border-cyan-400 focus:ring-2 focus:ring-cyan-100"
+                        onChange={(event) => setNewClodModel(event.target.value)}
+                        placeholder="Paste model name from app.clod.io/user/models"
+                        type="text"
+                        value={newClodModel}
+                      />
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          className="h-9 rounded-md border border-cyan-200 bg-cyan-50 px-3 text-sm font-bold text-cyan-700 hover:bg-cyan-100"
+                          onClick={handleAddClodModel}
+                          type="button"
+                        >
+                          Add model
+                        </button>
+                        <button
+                          className="h-9 rounded-md border border-slate-200 bg-white px-3 text-sm font-bold text-slate-600 hover:bg-slate-50"
+                          onClick={() => {
+                            setLocalState((current) => ({
+                              ...current,
+                              clodModels: [...defaultClodModels],
+                              apiModel: defaultClodModels[0],
+                            }));
+                          }}
+                          type="button"
+                        >
+                          Reset
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+                  <div className="flex items-start gap-2 rounded-md border border-slate-200 bg-slate-50 p-2 text-xs leading-4 text-slate-500">
+                    <Link2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-cyan-600" />
+                    Settings are saved locally in this browser. Fields remain editable.
                   </div>
-                </div>
-              ) : null}
-              <div className="flex items-start gap-2 rounded-md border border-slate-200 bg-slate-50 p-2 text-xs leading-4 text-slate-500">
-                <Link2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-cyan-600" />
-                Settings are saved locally in this browser. Fields remain editable.
-              </div>
-              <div className="space-y-2 rounded-md border border-slate-200 bg-slate-50 p-3">
+                  <div className="space-y-2 rounded-md border border-slate-200 bg-slate-50 p-3">
                 <div className="text-xs font-bold uppercase text-slate-500">Local presets</div>
                 <select
                   className="h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-800 outline-none focus:border-cyan-400 focus:ring-2 focus:ring-cyan-100"
@@ -1819,22 +1852,24 @@ export default function Home() {
                     Delete
                   </button>
                 </div>
-              </div>
-              <button
-                className="h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-sm font-bold text-slate-600 hover:bg-slate-50"
-                onClick={() => {
-                  window.localStorage.removeItem(API_SETTINGS_STORAGE_KEY);
-                  handleProviderChange("custom");
-                  setLocalState((current) => ({ ...current, apiKey: "" }));
-                  setStatus({
-                    type: "success",
-                    message: "Saved API settings cleared from this browser.",
-                  });
-                }}
-                type="button"
-              >
-                Clear saved API settings
-              </button>
+                  </div>
+                  <button
+                    className="h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-sm font-bold text-slate-600 hover:bg-slate-50"
+                    onClick={() => {
+                      window.localStorage.removeItem(API_SETTINGS_STORAGE_KEY);
+                      handleProviderChange("custom");
+                      setLocalState((current) => ({ ...current, apiKey: "" }));
+                      setStatus({
+                        type: "success",
+                        message: "Saved API settings cleared from this browser.",
+                      });
+                    }}
+                    type="button"
+                  >
+                    Clear saved API settings
+                  </button>
+                </div>
+              ) : null}
             </section>
 
             <section className="space-y-3">
