@@ -48,6 +48,8 @@ Usually you only need to fill:
 
 Your settings are saved in your browser, so you do not need to type them again every time.
 
+The download ZIP does not include any API key. API keys stay on your own computer.
+
 For advanced users, you can also copy `.env.example` to `.env.local` and edit:
 
 ```text
