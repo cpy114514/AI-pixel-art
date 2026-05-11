@@ -5,6 +5,9 @@ import net from "node:net";
 const preferredPort = Number(process.env.AI_PIXEL_ART_PORT ?? 3000);
 let serverProcess;
 let openedExistingDevServer = false;
+let existingNextDevServerDetected = false;
+let existingNextDevServerUrl = "";
+let devServerOutputBuffer = "";
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -91,6 +94,41 @@ function openBrowser(url) {
   spawn(command, [url], { detached: true, stdio: "ignore" }).unref();
 }
 
+function maybeOpenExistingNextDevServer(allowFallback = false) {
+  if (!existingNextDevServerDetected || openedExistingDevServer) {
+    return;
+  }
+
+  if (!existingNextDevServerUrl && !allowFallback) {
+    return;
+  }
+
+  const url = existingNextDevServerUrl || `http://localhost:${preferredPort}`;
+  openedExistingDevServer = true;
+  console.log(`Opening existing Next dev server at ${url}`);
+  openBrowser(url);
+}
+
+function handleNextDevOutput(chunk, stream) {
+  const text = chunk.toString();
+  stream.write(chunk);
+  devServerOutputBuffer = `${devServerOutputBuffer}${text}`.slice(-5000);
+
+  if (devServerOutputBuffer.includes("Another next dev server is already running.")) {
+    existingNextDevServerDetected = true;
+    const lockMessageStart = devServerOutputBuffer.indexOf(
+      "Another next dev server is already running.",
+    );
+    const lockMessage = devServerOutputBuffer.slice(lockMessageStart);
+    const localUrls = [...lockMessage.matchAll(/http:\/\/(?:localhost|127\.0\.0\.1):\d+/g)];
+    if (localUrls.length > 0) {
+      existingNextDevServerUrl = localUrls[localUrls.length - 1][0];
+    }
+  }
+
+  maybeOpenExistingNextDevServer();
+}
+
 function startNextDev(port) {
   const isWindows = process.platform === "win32";
   const command = isWindows ? (process.env.ComSpec ?? "cmd.exe") : "npm";
@@ -105,24 +143,15 @@ function startNextDev(port) {
   });
 
   serverProcess.stdout.on("data", (chunk) => {
-    process.stdout.write(chunk);
+    handleNextDevOutput(chunk, process.stdout);
   });
 
   serverProcess.stderr.on("data", (chunk) => {
-    const text = chunk.toString();
-    process.stderr.write(chunk);
-
-    if (text.includes("Another next dev server is already running.")) {
-      const localUrl = text.match(/http:\/\/(?:localhost|127\.0\.0\.1):\d+/)?.[0];
-      if (localUrl && !openedExistingDevServer) {
-        openedExistingDevServer = true;
-        console.log(`Opening existing Next dev server at ${localUrl}`);
-        openBrowser(localUrl);
-      }
-    }
+    handleNextDevOutput(chunk, process.stderr);
   });
 
   serverProcess.on("exit", (code) => {
+    maybeOpenExistingNextDevServer(true);
     if (openedExistingDevServer) {
       process.exit(0);
     }
@@ -160,6 +189,10 @@ async function main() {
 
   for (let attempt = 0; attempt < 120; attempt += 1) {
     if (await isPixelArtReady(port)) {
+      await sleep(1500);
+      if (existingNextDevServerDetected || openedExistingDevServer) {
+        return;
+      }
       console.log(`Opening ${url}`);
       openBrowser(url);
       return;
