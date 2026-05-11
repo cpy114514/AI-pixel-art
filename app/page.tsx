@@ -11,6 +11,7 @@ import {
 import {
   ChevronDown,
   ChevronUp,
+  Box,
   Copy,
   Download,
   Film,
@@ -25,6 +26,7 @@ import AIPanel, { type ReferenceImage, type SpriteHistoryItem } from "@/componen
 import { encodeSpritesAnimatedGif } from "@/lib/exportGif";
 import PixelCanvas from "@/components/PixelCanvas";
 import Toolbar, { type DrawTool } from "@/components/Toolbar";
+import VoxelCanvas from "@/components/VoxelCanvas";
 import {
   createBlankSprite,
   createVisibleSprite,
@@ -35,9 +37,19 @@ import {
   validatePixelSprite,
   type PixelSprite,
 } from "@/lib/pixelUtils";
+import {
+  countVisibleVoxels,
+  createBlankVoxelSprite,
+  repairVoxelSprite,
+  type VoxelSprite,
+} from "@/lib/voxelUtils";
 
 type FetchSpriteAiResult =
   | { ok: true; sprite: PixelSprite; frames?: PixelSprite[]; warnings: string[] }
+  | { ok: false; message: string; details?: unknown };
+
+type FetchVoxelAiResult =
+  | { ok: true; voxel: VoxelSprite; warnings: string[] }
   | { ok: false; message: string; details?: unknown };
 
 function formatSpriteAiFailureDetails(result: {
@@ -157,6 +169,55 @@ async function fetchSpriteAiFromApi(
   return {
     ok: true,
     sprite: validation.sprite,
+    warnings: [...validation.warnings, ...(result.warnings ?? [])],
+  };
+}
+
+async function fetchVoxelAiFromApi(
+  payload: Record<string, unknown>,
+): Promise<FetchVoxelAiResult> {
+  let response: Response;
+  try {
+    response = await fetch("/api/generate-voxel", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  } catch (error) {
+    return {
+      ok: false,
+      message: error instanceof Error ? error.message : "Network request failed.",
+    };
+  }
+
+  const result = (await response.json()) as {
+    voxel?: unknown;
+    warnings?: string[];
+    error?: string;
+    details?: unknown;
+  };
+
+  if (!response.ok) {
+    const detailText = formatSpriteAiFailureDetails(result);
+    return {
+      ok: false,
+      message: `${result.error ?? `Request failed (${response.status}).`}${detailText}`,
+      details: result.details,
+    };
+  }
+
+  const validation = repairVoxelSprite(result.voxel);
+  if (!validation.ok) {
+    return {
+      ok: false,
+      message: validation.errors.join(" "),
+      details: validation.errors,
+    };
+  }
+
+  return {
+    ok: true,
+    voxel: validation.voxel,
     warnings: [...validation.warnings, ...(result.warnings ?? [])],
   };
 }
@@ -786,6 +847,14 @@ export default function Home() {
   const [animationDescription, setAnimationDescription] = useState("");
   const [referenceImage, setReferenceImage] = useState<ReferenceImage | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [voxelPrompt, setVoxelPrompt] = useState("Draw an 8x8x8 treasure chest voxel model.");
+  const [voxelWidth, setVoxelWidth] = useState("8");
+  const [voxelHeight, setVoxelHeight] = useState("8");
+  const [voxelDepth, setVoxelDepth] = useState("8");
+  const [voxelSprite, setVoxelSprite] = useState<VoxelSprite>(() =>
+    createBlankVoxelSprite(8, 8, 8),
+  );
+  const [isGeneratingVoxel, setIsGeneratingVoxel] = useState(false);
   const [leftPanelWidth, setLeftPanelWidth] = useState(360);
   const [rightPanelWidth, setRightPanelWidth] = useState(320);
   const panelResizeDragRef = useRef<PanelResizeDrag | null>(null);
@@ -1558,6 +1627,71 @@ export default function Home() {
       setIsGenerating(false);
     }
   }
+
+  function parseVoxelSize(value: string) {
+    const size = Number(value.trim());
+    return Number.isInteger(size) && size >= 2 && size <= 16 ? size : null;
+  }
+
+  async function handleGenerateVoxel() {
+    const prompt = voxelPrompt.trim();
+    const width = parseVoxelSize(voxelWidth);
+    const height = parseVoxelSize(voxelHeight);
+    const depth = parseVoxelSize(voxelDepth);
+
+    if (!prompt) {
+      setStatus({ type: "error", message: "Enter a 3D voxel prompt first." });
+      return;
+    }
+    if (!width || !height || !depth) {
+      setStatus({ type: "error", message: "Voxel size must be whole numbers from 2 to 16." });
+      return;
+    }
+
+    setIsGeneratingVoxel(true);
+    setStatus({
+      type: "idle",
+      message: `Calling /api/generate-voxel for a ${width}x${height}x${depth} model...`,
+    });
+
+    try {
+      const outcome = await fetchVoxelAiFromApi({
+        prompt,
+        stylePreset,
+        width,
+        height,
+        depth,
+        provider: selectedProvider,
+        apiUrl,
+        apiKey,
+        model: apiModel,
+      });
+
+      if (!outcome.ok) {
+        setStatus({ type: "error", message: `3D voxel generation failed: ${outcome.message}` });
+        return;
+      }
+
+      setVoxelSprite(outcome.voxel);
+      setStatus({
+        type: outcome.warnings.length > 0 ? "warning" : "success",
+        message:
+          outcome.warnings.join(" ") ||
+          `Generated ${countVisibleVoxels(outcome.voxel)} solid cubes.`,
+      });
+    } catch (error) {
+      setStatus({
+        type: "error",
+        message:
+          error instanceof Error
+            ? `3D voxel generation failed: ${error.message}`
+            : "3D voxel generation failed.",
+      });
+    } finally {
+      setIsGeneratingVoxel(false);
+    }
+  }
+
   async function handleExportPng() {
     try {
       await exportSpritePng(sprite, pngScale);
@@ -1803,6 +1937,82 @@ export default function Home() {
               onStrokeStart={handleStrokeStart}
               onStrokeEnd={handleStrokeEnd}
             />
+            <section className="space-y-3 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <Box className="h-4 w-4 text-cyan-600" />
+                  <h2 className="text-sm font-bold text-slate-900">3D voxel generator</h2>
+                </div>
+                <span className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-bold text-slate-500">
+                  {countVisibleVoxels(voxelSprite)} cubes
+                </span>
+              </div>
+              <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_280px]">
+                <VoxelCanvas voxel={voxelSprite} />
+                <div className="space-y-3">
+                  <textarea
+                    className="min-h-24 w-full resize-none rounded-md border border-slate-200 bg-slate-50 p-3 text-sm leading-5 text-slate-800 outline-none transition focus:border-cyan-400 focus:bg-white focus:ring-2 focus:ring-cyan-100"
+                    onChange={(event) => setVoxelPrompt(event.target.value)}
+                    placeholder="Draw an 8x8x8 robot, house, potion bottle, sword, or creature."
+                    value={voxelPrompt}
+                  />
+                  <div className="grid grid-cols-3 gap-2">
+                    <label className="block space-y-1">
+                      <span className="text-xs font-bold uppercase text-slate-500">Width</span>
+                      <input
+                        className="h-9 w-full rounded-md border border-slate-200 px-2 text-sm font-bold text-slate-700 outline-none focus:border-cyan-400 focus:ring-2 focus:ring-cyan-100"
+                        max={16}
+                        min={2}
+                        onChange={(event) => setVoxelWidth(event.target.value)}
+                        type="number"
+                        value={voxelWidth}
+                      />
+                    </label>
+                    <label className="block space-y-1">
+                      <span className="text-xs font-bold uppercase text-slate-500">Height</span>
+                      <input
+                        className="h-9 w-full rounded-md border border-slate-200 px-2 text-sm font-bold text-slate-700 outline-none focus:border-cyan-400 focus:ring-2 focus:ring-cyan-100"
+                        max={16}
+                        min={2}
+                        onChange={(event) => setVoxelHeight(event.target.value)}
+                        type="number"
+                        value={voxelHeight}
+                      />
+                    </label>
+                    <label className="block space-y-1">
+                      <span className="text-xs font-bold uppercase text-slate-500">Depth</span>
+                      <input
+                        className="h-9 w-full rounded-md border border-slate-200 px-2 text-sm font-bold text-slate-700 outline-none focus:border-cyan-400 focus:ring-2 focus:ring-cyan-100"
+                        max={16}
+                        min={2}
+                        onChange={(event) => setVoxelDepth(event.target.value)}
+                        type="number"
+                        value={voxelDepth}
+                      />
+                    </label>
+                  </div>
+                  <button
+                    className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md bg-slate-900 px-3 text-sm font-bold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
+                    disabled={isGeneratingVoxel}
+                    onClick={handleGenerateVoxel}
+                    type="button"
+                  >
+                    <Box className="h-4 w-4" />
+                    {isGeneratingVoxel ? "Generating 3D..." : "Generate 3D voxels"}
+                  </button>
+                  <button
+                    className="h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-sm font-bold text-slate-600 hover:bg-slate-50"
+                    onClick={() => {
+                      navigator.clipboard.writeText(JSON.stringify(voxelSprite, null, 2));
+                      setStatus({ type: "success", message: "Copied 3D voxel JSON." });
+                    }}
+                    type="button"
+                  >
+                    Copy voxel JSON
+                  </button>
+                </div>
+              </div>
+            </section>
           </section>
 
           <button
