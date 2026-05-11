@@ -333,11 +333,17 @@ function getSpriteHistory(): SpriteHistoryItem[] {
             return false;
           }
           const candidate = item as Partial<SpriteHistoryItem>;
+          const validFrames =
+            candidate.frames === undefined ||
+            (Array.isArray(candidate.frames) &&
+              candidate.frames.length > 0 &&
+              candidate.frames.every((frame) => validatePixelSprite(frame).ok));
           return (
             typeof candidate.id === "string" &&
             typeof candidate.createdAt === "string" &&
             typeof candidate.prompt === "string" &&
-            validatePixelSprite(candidate.sprite).ok
+            validatePixelSprite(candidate.sprite).ok &&
+            validFrames
           );
         })
       : [];
@@ -503,6 +509,12 @@ function createSpriteFrame(sprite: PixelSprite, index: number, name?: string): S
   };
 }
 
+function createFramesFromSprites(sprites: PixelSprite[]) {
+  return sprites.map((frameSprite, index) =>
+    createSpriteFrame(frameSprite, index + 1, `Frame ${index + 1}`),
+  );
+}
+
 function imageFileToReferenceImage(file: File) {
   return new Promise<ReferenceImage>((resolve, reject) => {
     if (!file.type.startsWith("image/")) {
@@ -630,6 +642,79 @@ function FrameThumbnail({
       >
         <Trash2 className="h-4 w-4" />
       </button>
+    </div>
+  );
+}
+
+function AnimationPreview({
+  frames,
+  frameDelayMs,
+  onSelectFrame,
+}: {
+  frames: SpriteFrame[];
+  frameDelayMs: number;
+  onSelectFrame: (index: number) => void;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [previewIndex, setPreviewIndex] = useState(0);
+  const safePreviewIndex = frames.length > 0 ? previewIndex % frames.length : 0;
+  const previewFrame = frames[safePreviewIndex] ?? frames[0];
+
+  useEffect(() => {
+    if (frames.length <= 1) {
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      setPreviewIndex((current) => (current + 1) % frames.length);
+    }, Math.max(40, frameDelayMs));
+
+    return () => window.clearInterval(intervalId);
+  }, [frameDelayMs, frames.length]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const frame = previewFrame;
+    if (!canvas || !frame) {
+      return;
+    }
+
+    const maxSize = 176;
+    const scale = Math.max(
+      1,
+      Math.floor(maxSize / Math.max(frame.sprite.width, frame.sprite.height)),
+    );
+    canvas.width = frame.sprite.width * scale;
+    canvas.height = frame.sprite.height * scale;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      return;
+    }
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    drawSpriteToCanvas(ctx, frame.sprite, scale);
+  }, [previewFrame]);
+
+  return (
+    <div className="space-y-3 rounded-md border border-slate-200 bg-slate-50 p-3">
+      <div className="flex items-center justify-between gap-2">
+        <div>
+          <div className="text-xs font-bold uppercase text-slate-500">Animation preview</div>
+          <div className="mt-0.5 text-xs text-slate-500">
+            {frames.length} frame{frames.length === 1 ? "" : "s"} · {frameDelayMs} ms
+          </div>
+        </div>
+        <button
+          className="h-8 rounded-md border border-slate-200 bg-white px-2 text-xs font-bold text-slate-600 hover:bg-slate-50"
+          onClick={() => onSelectFrame(safePreviewIndex)}
+          type="button"
+        >
+          Open frame {safePreviewIndex + 1}
+        </button>
+      </div>
+      <div className="flex min-h-44 items-center justify-center rounded-md border border-slate-200 bg-[linear-gradient(45deg,#e2e8f0_25%,transparent_25%),linear-gradient(-45deg,#e2e8f0_25%,transparent_25%),linear-gradient(45deg,transparent_75%,#e2e8f0_75%),linear-gradient(-45deg,transparent_75%,#e2e8f0_75%)] bg-[length:12px_12px] bg-[position:0_0,0_6px,6px_-6px,-6px_0px] p-3">
+        <canvas ref={canvasRef} className="max-h-44 max-w-full" />
+      </div>
     </div>
   );
 }
@@ -1055,13 +1140,21 @@ export default function Home() {
     });
   }
 
-  function saveGeneratedSpriteToHistory(nextSprite: PixelSprite, historyPrompt = prompt) {
+  function saveGeneratedSpriteToHistory(
+    nextSprite: PixelSprite,
+    historyPrompt = prompt,
+    historyFrames?: PixelSprite[],
+  ) {
     const item: SpriteHistoryItem = {
       id: crypto.randomUUID(),
       createdAt: new Date().toISOString(),
       prompt: historyPrompt,
       stylePreset,
       sprite: nextSprite,
+      frames:
+        historyFrames && historyFrames.length > 1
+          ? historyFrames.map((historyFrame) => cloneSprite(historyFrame))
+          : undefined,
     };
 
     setLocalState((current) => ({
@@ -1075,6 +1168,21 @@ export default function Home() {
     if (stylePresets.includes(item.stylePreset as (typeof stylePresets)[number])) {
       setStylePreset(item.stylePreset as (typeof stylePresets)[number]);
     }
+    if (item.frames && item.frames.length > 1) {
+      const nextFrames = createFramesFromSprites(item.frames);
+      setFrames(nextFrames);
+      setActiveFrameIndex(0);
+      setSprite(cloneSprite(nextFrames[0].sprite));
+      setUndoStack([]);
+      setRedoStack([]);
+      strokeSnapshotRef.current = null;
+      setStatus({
+        type: "success",
+        message: `Loaded ${nextFrames.length}-frame animation from history.`,
+      });
+      return;
+    }
+
     commitSprite(item.sprite, {
       type: "success",
       message: `Loaded history item from ${new Date(item.createdAt).toLocaleString()}.`,
@@ -1282,7 +1390,11 @@ export default function Home() {
       };
       applyEditedFrames(editedFrames, nextStatus);
       const historyFrame = editedFrames[activeFrameIndex] ?? editedFrames[0];
-      saveGeneratedSpriteToHistory(historyFrame.sprite, `Edit all frames: ${requestEditInstruction}`);
+      saveGeneratedSpriteToHistory(
+        historyFrame.sprite,
+        `Edit all frames: ${requestEditInstruction}`,
+        editedFrames.map((frame) => frame.sprite),
+      );
     } catch (error) {
       setStatus({
         type: "error",
@@ -1353,16 +1465,18 @@ export default function Home() {
         return;
       }
 
-      const nextFrames = outcome.frames.map((frameSprite, index) =>
-        createSpriteFrame(frameSprite, index + 1, `Frame ${index + 1}`),
-      );
+      const nextFrames = createFramesFromSprites(outcome.frames);
       setFrames(nextFrames);
       setActiveFrameIndex(0);
       setSprite(cloneSprite(nextFrames[0].sprite));
       setUndoStack([]);
       setRedoStack([]);
       strokeSnapshotRef.current = null;
-      saveGeneratedSpriteToHistory(nextFrames[0].sprite, `Animation ${n} frames: ${desc}`);
+      saveGeneratedSpriteToHistory(
+        nextFrames[0].sprite,
+        `Animation ${n} frames: ${desc}`,
+        nextFrames.map((frame) => frame.sprite),
+      );
       setStatus({
         type: outcome.warnings.length > 0 ? "warning" : "success",
         message: outcome.warnings.join(" ") || `Generated ${nextFrames.length}-frame animation.`,
@@ -1728,6 +1842,11 @@ export default function Home() {
                 <ImageDown className="h-4 w-4 text-cyan-600" />
                 <h2 className="text-sm font-bold text-slate-900">Export PNG / GIF</h2>
               </div>
+              <AnimationPreview
+                frameDelayMs={gifFrameDelayMs}
+                frames={frames}
+                onSelectFrame={handleSelectFrame}
+              />
               <div className="rounded-md border border-slate-200 bg-slate-50 p-2 text-xs leading-4 text-slate-500">
                 Sprite sheet: {frames.length} frames, horizontal strip,{" "}
                 {sprite.width * frames.length}x{sprite.height} base pixels.

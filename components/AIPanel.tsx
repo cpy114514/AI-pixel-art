@@ -11,6 +11,7 @@ export type SpriteHistoryItem = {
   prompt: string;
   stylePreset: string;
   sprite: PixelSprite;
+  frames?: PixelSprite[];
 };
 
 export type ReferenceImage = {
@@ -429,9 +430,15 @@ export default function AIPanel({
                   onClick={() => onLoadHistoryItem(item)}
                   type="button"
                 >
-                  <div className="truncate text-xs font-bold text-slate-800">
+                  <div className="flex min-w-0 items-center gap-1.5 text-xs font-bold text-slate-800">
                     {item.sprite.width}x{item.sprite.height} · {item.stylePreset}
                   </div>
+                  {item.frames && item.frames.length > 1 ? (
+                    <div className="mt-1 inline-flex items-center gap-1 rounded border border-cyan-100 bg-cyan-50 px-1.5 py-0.5 text-[10px] font-bold uppercase text-cyan-700">
+                      <Film className="h-3 w-3" />
+                      {item.frames.length} frames
+                    </div>
+                  ) : null}
                   <div className="mt-1 line-clamp-2 text-xs leading-4 text-slate-500">
                     {item.prompt}
                   </div>
