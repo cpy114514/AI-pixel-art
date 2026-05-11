@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "ai-pixel-painter": {
+      "command": "npm",
+      "args": ["run", "mcp:agent"],
+      "cwd": "PATH_TO_AI_Pixel_Painter",
+      "env": {
+        "AI_PIXEL_PAINTER_BASE_URL": "http://127.0.0.1:3000"
+      }
+    }
+  }
+}

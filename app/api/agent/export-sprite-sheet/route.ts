@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { assertAgentAuthorized } from "@/lib/agentAuth";
+import { getScale, validateSpriteFrames } from "@/lib/agentFrameUtils";
 import { toExactArrayBuffer } from "@/lib/binaryResponse";
-import { spriteToPngBuffer } from "@/lib/spriteToPng";
-import { validatePixelSprite } from "@/lib/pixelUtils";
+import { spriteSheetToPngBuffer } from "@/lib/spriteToPng";
 
 export async function POST(request: NextRequest) {
   const unauthorized = assertAgentAuthorized(request);
@@ -17,37 +17,34 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Request body must be valid JSON." }, { status: 400 });
   }
 
-  if (!body || typeof body !== "object" || !("sprite" in body)) {
-    return NextResponse.json({ error: 'JSON must include a "sprite" object.' }, { status: 400 });
+  if (!body || typeof body !== "object" || !("frames" in body)) {
+    return NextResponse.json({ error: 'JSON must include a "frames" array.' }, { status: 400 });
   }
 
-  const record = body as { sprite: unknown; scale?: unknown };
-  const scale =
-    typeof record.scale === "number" && Number.isFinite(record.scale)
-      ? Math.floor(record.scale)
-      : 8;
-
-  const validation = validatePixelSprite(record.sprite);
+  const record = body as { frames: unknown; scale?: unknown };
+  const validation = validateSpriteFrames(record.frames);
   if (!validation.ok) {
     return NextResponse.json(
-      { error: "Sprite validation failed.", errors: validation.errors, warnings: validation.warnings },
+      { error: "Frame validation failed.", errors: validation.errors, warnings: validation.warnings },
       { status: 422 },
     );
   }
 
+  const scale = getScale(record.scale);
   try {
-    const buffer = spriteToPngBuffer(validation.sprite, scale);
+    const buffer = spriteSheetToPngBuffer(validation.frames, scale);
+    const first = validation.frames[0];
     return new NextResponse(toExactArrayBuffer(buffer), {
       status: 200,
       headers: {
         "Content-Type": "image/png",
-        "Content-Disposition": `attachment; filename="sprite-${validation.sprite.width}x${validation.sprite.height}-${scale}x.png"`,
+        "Content-Disposition": `attachment; filename="sprite-sheet-${validation.frames.length}frames-${first.width}x${first.height}-${scale}x.png"`,
       },
     });
   } catch (error) {
     return NextResponse.json(
       {
-        error: "PNG encoding failed.",
+        error: "Sprite sheet encoding failed.",
         details: error instanceof Error ? error.message : String(error),
       },
       { status: 500 },

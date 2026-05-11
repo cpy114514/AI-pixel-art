@@ -56,3 +56,39 @@ export function spriteToPngBuffer(sprite: PixelSprite, scale: number): Buffer {
 
   return PNG.sync.write(png, { colorType: 6 });
 }
+
+export function spriteSheetToPngBuffer(sprites: PixelSprite[], scale: number): Buffer {
+  if (sprites.length === 0) {
+    throw new Error("No frames to export.");
+  }
+
+  const first = sprites[0];
+  for (const sprite of sprites) {
+    if (sprite.width !== first.width || sprite.height !== first.height) {
+      throw new Error("All frames must share the same width and height for sprite sheet export.");
+    }
+  }
+
+  const safeScale = Math.max(1, Math.min(32, Math.floor(scale)));
+  const w = first.width * sprites.length * safeScale;
+  const h = first.height * safeScale;
+  const png = new PNG({ width: w, height: h, colorType: 6 });
+
+  sprites.forEach((sprite, frameIndex) => {
+    const frameOffsetX = frameIndex * first.width * safeScale;
+    for (let y = 0; y < first.height * safeScale; y += 1) {
+      for (let x = 0; x < first.width * safeScale; x += 1) {
+        const sx = Math.min(sprite.width - 1, Math.floor(x / safeScale));
+        const sy = Math.min(sprite.height - 1, Math.floor(y / safeScale));
+        const rgba = parseHexToRgba(sprite.pixels[sy][sx]);
+        const idx = (w * y + frameOffsetX + x) << 2;
+        png.data[idx] = rgba.r;
+        png.data[idx + 1] = rgba.g;
+        png.data[idx + 2] = rgba.b;
+        png.data[idx + 3] = rgba.a;
+      }
+    }
+  });
+
+  return PNG.sync.write(png, { colorType: 6 });
+}

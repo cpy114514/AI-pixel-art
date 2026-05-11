@@ -67,6 +67,69 @@ npm install
 npm run dev
 ```
 
+## AI Agent Tool
+
+AI agents can use this app through MCP or local REST APIs.
+
+Start the web app first:
+
+```bash
+npm run dev
+```
+
+Then start the MCP tool server:
+
+```bash
+npm run mcp:agent
+```
+
+Example MCP config:
+
+```json
+{
+  "mcpServers": {
+    "ai-pixel-painter": {
+      "command": "npm",
+      "args": ["run", "mcp:agent"],
+      "cwd": "PATH_TO_AI_Pixel_Painter",
+      "env": {
+        "AI_PIXEL_PAINTER_BASE_URL": "http://127.0.0.1:3000"
+      }
+    }
+  }
+}
+```
+
+The MCP server gives agents tools to:
+
+- generate a sprite
+- edit a sprite
+- generate animation frames
+- validate sprite JSON
+- export PNG
+- export sprite sheet PNG
+- export animated GIF
+
+REST manifest:
+
+```text
+GET http://127.0.0.1:3000/api/agent/manifest
+```
+
+Optional local auth:
+
+```text
+AGENT_API_SECRET=your-local-secret
+```
+
+When set, agent REST routes require:
+
+```text
+Authorization: Bearer your-local-secret
+```
+
+See `mcp-config.example.json` for a copyable MCP setup.
+
 Build:
 
 ```bash
