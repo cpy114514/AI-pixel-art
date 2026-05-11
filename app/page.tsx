@@ -1588,7 +1588,7 @@ export default function Home() {
       <div className="mx-auto flex min-h-screen w-full max-w-[1500px] flex-col gap-4 px-4 py-4">
         <header className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-sm">
           <div>
-            <h1 className="text-xl font-black text-slate-950">AI Pixel Painter</h1>
+            <h1 className="text-xl font-black text-slate-950">AI Pixel Art</h1>
             <p className="text-sm text-slate-500">
               Build multi-frame game sprites from exact JSON pixel color data.
             </p>
@@ -1850,7 +1850,7 @@ export default function Home() {
                   ) : null}
                   <div className="flex items-start gap-2 rounded-md border border-slate-200 bg-slate-50 p-2 text-xs leading-4 text-slate-500">
                     <Link2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-cyan-600" />
-                    Settings are saved locally in this browser. Fields remain editable.
+                    Settings are saved locally in this app. Fields remain editable.
                   </div>
                   <div className="space-y-2 rounded-md border border-slate-200 bg-slate-50 p-3">
                 <div className="text-xs font-bold uppercase text-slate-500">Local presets</div>
@@ -1898,7 +1898,7 @@ export default function Home() {
                       setLocalState((current) => ({ ...current, apiKey: "" }));
                       setStatus({
                         type: "success",
-                        message: "Saved API settings cleared from this browser.",
+                        message: "Saved API settings cleared from this app.",
                       });
                     }}
                     type="button"

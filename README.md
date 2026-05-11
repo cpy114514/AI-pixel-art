@@ -1,4 +1,4 @@
-# AI Pixel Painter
+# AI Pixel Art
 
 A simple pixel-art tool for making game sprites with AI.
 
@@ -17,11 +17,11 @@ Or use GitHub's green **Code** button and choose **Download ZIP**.
 1. Download the ZIP.
 2. Extract it.
 3. Double-click `install.bat`.
-4. The app will open in your browser.
+4. The app will open in its own desktop window.
 
-After installation, you can start it again from the desktop shortcut **AI Pixel Painter**, or by double-clicking `start.bat`.
+After installation, you can start it again from the desktop shortcut **AI Pixel Art**, or by double-clicking `start.bat`.
 
-The app runs locally at:
+The app runs in its own desktop window. A local engine still runs at:
 
 ```text
 http://127.0.0.1:3000
@@ -46,7 +46,7 @@ Usually you only need to fill:
 - API key
 - model name, if your provider requires it
 
-Your settings are saved in your browser, so you do not need to type them again every time.
+Your settings are saved locally in the app, so you do not need to type them again every time.
 
 The download ZIP does not include any API key. API keys stay on your own computer.
 

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "AI Pixel Painter",
+  title: "AI Pixel Art",
   description: "Generate and edit pixel-art sprites from exact JSON color data.",
 };
 

@@ -1,12 +1,12 @@
 @echo off
 setlocal
-title AI Pixel Painter Installer
+title AI Pixel Art Installer
 
 cd /d "%~dp0"
 
 echo.
 echo =====================================
-echo   AI Pixel Painter - One Click Setup
+echo   AI Pixel Art - One Click Setup
 echo =====================================
 echo.
 
@@ -63,16 +63,16 @@ if errorlevel 1 (
 )
 
 echo Creating desktop shortcut...
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$desktop = [Environment]::GetFolderPath('Desktop'); $shortcut = Join-Path $desktop 'AI Pixel Painter.lnk'; $shell = New-Object -ComObject WScript.Shell; $link = $shell.CreateShortcut($shortcut); $link.TargetPath = Join-Path (Get-Location) 'start.bat'; $link.WorkingDirectory = (Get-Location).Path; $link.IconLocation = 'shell32.dll,220'; $link.Save()" >nul 2>nul
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$desktop = [Environment]::GetFolderPath('Desktop'); $shortcut = Join-Path $desktop 'AI Pixel Art.lnk'; $shell = New-Object -ComObject WScript.Shell; $link = $shell.CreateShortcut($shortcut); $link.TargetPath = Join-Path (Get-Location) 'start.bat'; $link.WorkingDirectory = (Get-Location).Path; $link.IconLocation = 'shell32.dll,220'; $link.Save()" >nul 2>nul
 
 echo.
 echo Setup complete.
-echo You can now start AI Pixel Painter with:
-echo - the desktop shortcut: AI Pixel Painter
+echo You can now start AI Pixel Art with:
+echo - the desktop shortcut: AI Pixel Art
 echo - or this folder's start.bat
 echo.
 
-choice /C YN /M "Start AI Pixel Painter now"
+choice /C YN /M "Start AI Pixel Art now"
 if errorlevel 2 (
   echo Done.
   pause
