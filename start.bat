@@ -33,31 +33,7 @@ if not exist "node_modules" (
   )
 )
 
-if not exist "node_modules\electron" (
-  echo Installing desktop shell...
-  if exist "package-lock.json" (
-    call npm ci
-  ) else (
-    call npm install
-  )
-  if errorlevel 1 (
-    echo Desktop shell installation failed.
-    pause
-    exit /b 1
-  )
-)
+echo Starting AI Pixel Art in your browser...
 
-if not exist ".next\BUILD_ID" (
-  echo Preparing optimized app. This can take a minute the first time only...
-  call npm run build
-  if errorlevel 1 (
-    echo App build failed.
-    pause
-    exit /b 1
-  )
-)
-
-echo Starting AI Pixel Art desktop app...
-
-call npm run desktop
+call npm run browser
 pause

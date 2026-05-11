@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "A pixel-art sprite editor for AI-generated JSON pixel data.",
   "scripts": {
-    "desktop": "electron electron/main.mjs",
+    "browser": "node scripts/start-browser.mjs",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
@@ -29,7 +29,6 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "autoprefixer": "^10.5.0",
-    "electron": "^42.0.1",
     "eslint": "^9.39.4",
     "eslint-config-next": "^16.2.6",
     "postcss": "^8.5.14",
