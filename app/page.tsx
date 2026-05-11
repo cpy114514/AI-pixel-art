@@ -20,6 +20,7 @@ import PixelCanvas from "@/components/PixelCanvas";
 import Toolbar, { type DrawTool } from "@/components/Toolbar";
 import {
   createBlankSprite,
+  createVisibleSprite,
   resizeSprite,
   setPixelColor,
   spriteToJson,
@@ -423,9 +424,10 @@ function canvasToDownload(canvas: HTMLCanvasElement, filename: string) {
 }
 
 function exportSpritePng(sprite: PixelSprite, scale: number) {
+  const visibleSprite = createVisibleSprite(sprite);
   const canvas = document.createElement("canvas");
-  canvas.width = sprite.width * scale;
-  canvas.height = sprite.height * scale;
+  canvas.width = visibleSprite.width * scale;
+  canvas.height = visibleSprite.height * scale;
 
   const ctx = canvas.getContext("2d");
   if (!ctx) {
@@ -433,11 +435,11 @@ function exportSpritePng(sprite: PixelSprite, scale: number) {
   }
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  drawSpriteToCanvas(ctx, sprite, scale);
+  drawSpriteToCanvas(ctx, visibleSprite, scale);
 
   return canvasToDownload(
     canvas,
-    `ai-pixel-painter-${sprite.width}x${sprite.height}-${scale}x.png`,
+    `ai-pixel-painter-${visibleSprite.width}x${visibleSprite.height}-${scale}x.png`,
   );
 }
 
@@ -446,7 +448,11 @@ function exportSpriteSheetPng(frames: SpriteFrame[], scale: number) {
     throw new Error("No frames to export.");
   }
 
-  const first = frames[0].sprite;
+  const visibleFrames = frames.map((frame) => ({
+    ...frame,
+    sprite: createVisibleSprite(frame.sprite),
+  }));
+  const first = visibleFrames[0].sprite;
   const canvas = document.createElement("canvas");
   canvas.width = first.width * frames.length * scale;
   canvas.height = first.height * scale;
@@ -457,7 +463,7 @@ function exportSpriteSheetPng(frames: SpriteFrame[], scale: number) {
   }
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  frames.forEach((frame, index) => {
+  visibleFrames.forEach((frame, index) => {
     drawSpriteToCanvas(ctx, frame.sprite, scale, index * first.width * scale, 0);
   });
 
@@ -766,8 +772,11 @@ export default function Home() {
   });
 
   const filledPixels = useMemo(
-    () => sprite.pixels.flat().filter((color) => color !== TRANSPARENT).length,
-    [sprite.pixels],
+    () =>
+      createVisibleSprite(sprite)
+        .pixels.flat()
+        .filter((color) => color !== TRANSPARENT).length,
+    [sprite],
   );
   const activeFrame = frames[activeFrameIndex] ?? frames[0];
   const {
@@ -1060,7 +1069,7 @@ export default function Home() {
     setSprite(next);
     setStatus({
       type: "success",
-      message: `All frames resized to ${width}x${height}. Existing pixels were preserved where possible.`,
+      message: `Grid changed to ${width}x${height}. Pixels outside the visible grid are kept and reappear if you expand it again.`,
     });
   }
 
@@ -1159,15 +1168,16 @@ export default function Home() {
     historyPrompt = prompt,
     historyFrames?: PixelSprite[],
   ) {
+    const visibleSprite = createVisibleSprite(nextSprite);
     const item: SpriteHistoryItem = {
       id: crypto.randomUUID(),
       createdAt: new Date().toISOString(),
       prompt: historyPrompt,
       stylePreset,
-      sprite: nextSprite,
+      sprite: visibleSprite,
       frames:
         historyFrames && historyFrames.length > 1
-          ? historyFrames.map((historyFrame) => cloneSprite(historyFrame))
+          ? historyFrames.map((historyFrame) => createVisibleSprite(historyFrame))
           : undefined,
     };
 
@@ -1369,7 +1379,7 @@ export default function Home() {
           apiUrl,
           apiKey,
           model: apiModel,
-          currentSprite: sprite,
+          currentSprite: createVisibleSprite(sprite),
         },
         idleMessage: "Calling /api/generate-sprite to edit current sprite...",
         successMessage: `Edited ${sprite.width}x${sprite.height} sprite.`,
@@ -1407,7 +1417,7 @@ export default function Home() {
           apiUrl,
           apiKey,
           model: apiModel,
-          currentSprite: frame.sprite,
+          currentSprite: createVisibleSprite(frame.sprite),
         });
 
         if (!outcome.ok) {
@@ -1486,7 +1496,7 @@ export default function Home() {
         apiUrl,
         apiKey,
         model: apiModel,
-        currentSprite: sprite,
+        currentSprite: createVisibleSprite(sprite),
       });
 
       if (!outcome.ok) {
@@ -1554,10 +1564,10 @@ export default function Home() {
 
   function handleExportGif() {
     try {
-      const sprites = frames.map((f) => f.sprite);
+      const sprites = frames.map((f) => createVisibleSprite(f.sprite));
       const bytes = encodeSpritesAnimatedGif(sprites, pngScale, gifFrameDelayMs);
       const blob = new Blob([new Uint8Array(bytes)], { type: "image/gif" });
-      const first = frames[0].sprite;
+      const first = sprites[0];
       downloadBlob(
         blob,
         `ai-pixel-painter-${frames.length}frames-${first.width}x${first.height}-${pngScale}x.gif`,

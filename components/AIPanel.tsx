@@ -126,20 +126,22 @@ export default function AIPanel({
 }: AIPanelProps) {
   const [aiToolMode, setAiToolMode] = useState<AiToolMode>("generate");
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const customWidth = canvasWidth.toString();
-  const customHeight = canvasHeight.toString();
+  const widthInputRef = useRef<HTMLInputElement>(null);
+  const heightInputRef = useRef<HTMLInputElement>(null);
+
+  function parseCustomSize(value: string) {
+    if (!/^\d+$/.test(value.trim())) {
+      return null;
+    }
+
+    const size = Number(value);
+    return Number.isInteger(size) && size > 0 && size <= 128 ? size : null;
+  }
 
   function applyCustomSize(widthValue: string, heightValue: string) {
-    const width = Number(widthValue);
-    const height = Number(heightValue);
-    if (
-      Number.isInteger(width) &&
-      Number.isInteger(height) &&
-      width > 0 &&
-      height > 0 &&
-      width <= 128 &&
-      height <= 128
-    ) {
+    const width = parseCustomSize(widthValue);
+    const height = parseCustomSize(heightValue);
+    if (width !== null && height !== null) {
       onResize(width, height);
     }
   }
@@ -350,40 +352,77 @@ export default function AIPanel({
             <span className="text-xs font-bold uppercase text-slate-500">Width</span>
             <input
               className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 outline-none focus:border-cyan-400 focus:ring-2 focus:ring-cyan-100"
+              defaultValue={canvasWidth}
+              key={`width-${canvasWidth}`}
               max={128}
-              min={1}
-              onBlur={(event) => applyCustomSize(event.target.value, customHeight)}
+              min={0}
+              onBlur={(event) =>
+                applyCustomSize(
+                  event.target.value,
+                  heightInputRef.current?.value ?? canvasHeight.toString(),
+                )
+              }
               onKeyDown={(event) => {
                 if (event.key === "Enter") {
-                  applyCustomSize(event.currentTarget.value, customHeight);
+                  applyCustomSize(
+                    event.currentTarget.value,
+                    heightInputRef.current?.value ?? canvasHeight.toString(),
+                  );
                 }
               }}
+              ref={widthInputRef}
               type="number"
-              value={customWidth}
-              onChange={(event) => applyCustomSize(event.target.value, customHeight)}
+              onChange={(event) => {
+                const nextWidth = event.target.value;
+                applyCustomSize(
+                  nextWidth,
+                  heightInputRef.current?.value ?? canvasHeight.toString(),
+                );
+              }}
             />
           </label>
           <label className="block space-y-1">
             <span className="text-xs font-bold uppercase text-slate-500">Height</span>
             <input
               className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 outline-none focus:border-cyan-400 focus:ring-2 focus:ring-cyan-100"
+              defaultValue={canvasHeight}
+              key={`height-${canvasHeight}`}
               max={128}
-              min={1}
-              onBlur={(event) => applyCustomSize(customWidth, event.target.value)}
+              min={0}
+              onBlur={(event) =>
+                applyCustomSize(
+                  widthInputRef.current?.value ?? canvasWidth.toString(),
+                  event.target.value,
+                )
+              }
               onKeyDown={(event) => {
                 if (event.key === "Enter") {
-                  applyCustomSize(customWidth, event.currentTarget.value);
+                  applyCustomSize(
+                    widthInputRef.current?.value ?? canvasWidth.toString(),
+                    event.currentTarget.value,
+                  );
                 }
               }}
+              ref={heightInputRef}
               type="number"
-              value={customHeight}
-              onChange={(event) => applyCustomSize(customWidth, event.target.value)}
+              onChange={(event) => {
+                const nextHeight = event.target.value;
+                applyCustomSize(
+                  widthInputRef.current?.value ?? canvasWidth.toString(),
+                  nextHeight,
+                );
+              }}
             />
           </label>
           <div className="flex items-end">
             <button
               className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 hover:bg-slate-50"
-              onClick={() => applyCustomSize(customWidth, customHeight)}
+              onClick={() =>
+                applyCustomSize(
+                  widthInputRef.current?.value ?? canvasWidth.toString(),
+                  heightInputRef.current?.value ?? canvasHeight.toString(),
+                )
+              }
               type="button"
             >
               Set

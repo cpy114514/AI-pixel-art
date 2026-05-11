@@ -51,6 +51,27 @@ export function createBlankSprite(width: number, height: number): PixelSprite {
   };
 }
 
+function getStoredPixelWidth(sprite: PixelSprite): number {
+  return Math.max(sprite.width, ...sprite.pixels.map((row) => row.length));
+}
+
+function getStoredPixelHeight(sprite: PixelSprite): number {
+  return Math.max(sprite.height, sprite.pixels.length);
+}
+
+export function createVisibleSprite(sprite: PixelSprite): PixelSprite {
+  const next = createBlankSprite(sprite.width, sprite.height);
+
+  for (let y = 0; y < sprite.height; y += 1) {
+    const sourceRow = sprite.pixels[y] ?? [];
+    for (let x = 0; x < sprite.width; x += 1) {
+      next.pixels[y][x] = sourceRow[x] ?? TRANSPARENT;
+    }
+  }
+
+  return next;
+}
+
 export function validatePixelSprite(
   input: unknown,
   fallbackColor: PixelColor = TRANSPARENT,
@@ -225,10 +246,18 @@ export function resizeSprite(
   width: number,
   height: number,
 ): PixelSprite {
-  const next = createBlankSprite(width, height);
+  const storedWidth = Math.max(width, getStoredPixelWidth(sprite));
+  const storedHeight = Math.max(height, getStoredPixelHeight(sprite));
+  const next: PixelSprite = {
+    width,
+    height,
+    pixels: Array.from({ length: storedHeight }, () =>
+      Array.from({ length: storedWidth }, () => TRANSPARENT),
+    ),
+  };
 
-  for (let y = 0; y < Math.min(height, sprite.height); y += 1) {
-    for (let x = 0; x < Math.min(width, sprite.width); x += 1) {
+  for (let y = 0; y < sprite.pixels.length; y += 1) {
+    for (let x = 0; x < sprite.pixels[y].length; x += 1) {
       next.pixels[y][x] = sprite.pixels[y][x];
     }
   }
@@ -275,7 +304,7 @@ export function setPixelColor(
 }
 
 export function spriteToJson(sprite: PixelSprite): string {
-  return JSON.stringify(sprite, null, 2);
+  return JSON.stringify(createVisibleSprite(sprite), null, 2);
 }
 
 export function parseSpriteJson(json: string): SpriteValidationResult {
