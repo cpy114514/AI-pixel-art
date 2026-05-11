@@ -1972,7 +1972,7 @@ export default function Home() {
             type="button"
           />
 
-          <section className="flex min-h-[620px] flex-col gap-3 lg:min-h-0">
+          <section className="drag-resize flex min-h-[620px] min-w-[360px] flex-col gap-3 lg:min-h-0">
             <Toolbar
               selectedColor={selectedColor}
               activeTool={activeTool}
@@ -1991,7 +1991,7 @@ export default function Home() {
                 })
               }
             />
-            <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+            <div className="drag-resize-y min-h-36 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <Film className="h-4 w-4 text-cyan-600" />
@@ -2030,14 +2030,16 @@ export default function Home() {
                 ))}
               </div>
             </div>
-            <PixelCanvas
-              sprite={sprite}
-              showGrid={showGrid}
-              onPixelAction={handlePixelAction}
-              onStrokeStart={handleStrokeStart}
-              onStrokeEnd={handleStrokeEnd}
-            />
-            <section className="space-y-3 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+            <div className="drag-resize min-h-[360px]">
+              <PixelCanvas
+                sprite={sprite}
+                showGrid={showGrid}
+                onPixelAction={handlePixelAction}
+                onStrokeStart={handleStrokeStart}
+                onStrokeEnd={handleStrokeEnd}
+              />
+            </div>
+            <section className="drag-resize min-h-[420px] space-y-3 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <Box className="h-4 w-4 text-cyan-600" />
@@ -2240,8 +2242,8 @@ export default function Home() {
             type="button"
           />
 
-          <aside className="flex min-h-0 flex-col gap-4 overflow-auto rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-            <section className="space-y-3">
+          <aside className="drag-resize flex min-h-0 min-w-60 flex-col gap-4 overflow-auto rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+            <section className="drag-resize-y min-h-28 space-y-3">
               <div className="flex items-center justify-between gap-2">
                 <div className="flex min-w-0 items-center gap-2">
                   <KeyRound className="h-4 w-4 shrink-0 text-cyan-600" />
@@ -2436,7 +2438,7 @@ export default function Home() {
               ) : null}
             </section>
 
-            <section className="space-y-3">
+            <section className="drag-resize-y min-h-40 space-y-3">
               <div className="flex items-center gap-2">
                 <ImageDown className="h-4 w-4 text-cyan-600" />
                 <h2 className="text-sm font-bold text-slate-900">Export PNG / GIF</h2>

@@ -147,8 +147,8 @@ export default function AIPanel({
   }
 
   return (
-    <aside className="flex min-h-0 flex-col gap-4 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-      <section className="space-y-3">
+    <aside className="drag-resize flex min-h-0 min-w-60 flex-col gap-4 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+      <section className="drag-resize-y min-h-32 space-y-3">
         <div className="flex items-center gap-2">
           <Bot className="h-4 w-4 text-cyan-600" />
           <h2 className="text-sm font-bold text-slate-900">AI tools</h2>
@@ -326,7 +326,7 @@ export default function AIPanel({
         ) : null}
       </section>
 
-      <section className="space-y-3">
+      <section className="drag-resize-y min-h-32 space-y-3">
         <div className="flex items-center gap-2">
           <Ruler className="h-4 w-4 text-cyan-600" />
           <h2 className="text-sm font-bold text-slate-900">Canvas settings</h2>
@@ -431,7 +431,7 @@ export default function AIPanel({
         </div>
       </section>
 
-      <section className="min-h-0 space-y-3">
+      <section className="drag-resize-y min-h-40 space-y-3">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <History className="h-4 w-4 text-cyan-600" />

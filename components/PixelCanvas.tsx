@@ -159,7 +159,7 @@ export default function PixelCanvas({
 
   return (
     <div
-      className="flex min-h-0 flex-1 items-center justify-center overflow-auto rounded-lg border border-slate-200 bg-slate-100 p-5 shadow-inner"
+      className="flex h-full min-h-[360px] flex-1 items-center justify-center overflow-auto rounded-lg border border-slate-200 bg-slate-100 p-5 shadow-inner"
       ref={containerRef}
     >
       <div className="relative inline-flex max-h-full max-w-full items-start justify-start">
