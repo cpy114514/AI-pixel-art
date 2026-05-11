@@ -3,6 +3,8 @@ import http from "node:http";
 import net from "node:net";
 
 const preferredPort = Number(process.env.AI_PIXEL_ART_PORT ?? 3000);
+const portSearchLimit = preferredPort + 19;
+const projectRoot = process.cwd();
 let serverProcess;
 let openedExistingDevServer = false;
 let existingNextDevServerDetected = false;
@@ -11,6 +13,10 @@ let devServerOutputBuffer = "";
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function escapePowerShellSingleQuotedString(value) {
+  return value.replaceAll("'", "''");
 }
 
 function requestJson(url) {
@@ -39,6 +45,30 @@ function requestJson(url) {
   });
 }
 
+function runCommand(command, args, options = {}) {
+  return new Promise((resolve) => {
+    const child = spawn(command, args, {
+      windowsHide: true,
+      ...options,
+    });
+    let stdout = "";
+    let stderr = "";
+
+    child.stdout?.on("data", (chunk) => {
+      stdout += chunk.toString();
+    });
+    child.stderr?.on("data", (chunk) => {
+      stderr += chunk.toString();
+    });
+    child.on("error", (error) => {
+      resolve({ code: 1, stdout, stderr: error.message });
+    });
+    child.on("exit", (code) => {
+      resolve({ code: code ?? 0, stdout, stderr });
+    });
+  });
+}
+
 function canListenOnPort(port) {
   return new Promise((resolve) => {
     const tester = net.createServer();
@@ -64,8 +94,80 @@ async function isPixelArtReady(port) {
   );
 }
 
+async function findReadyPixelArtPort() {
+  for (let port = preferredPort; port <= portSearchLimit; port += 1) {
+    if (await isPixelArtReady(port)) {
+      return port;
+    }
+  }
+
+  return null;
+}
+
+async function getProjectNextProcessIds() {
+  if (process.platform !== "win32") {
+    return [];
+  }
+
+  const escapedRoot = escapePowerShellSingleQuotedString(projectRoot);
+  const command = [
+    "$root = '" + escapedRoot + "';",
+    "Get-CimInstance Win32_Process",
+    "|",
+    "Where-Object { $_.ProcessId -ne $PID -and $_.CommandLine -and $_.CommandLine.Contains($root) -and ($_.CommandLine -match 'next(\\\\|/)dist(\\\\|/)bin|next(\\\\|/)dist(\\\\|/)server|postcss\\.js') } |",
+    "Select-Object -ExpandProperty ProcessId",
+  ].join(" ");
+
+  const result = await runCommand("powershell.exe", [
+    "-NoProfile",
+    "-ExecutionPolicy",
+    "Bypass",
+    "-Command",
+    command,
+  ]);
+
+  return result.stdout
+    .split(/\r?\n/)
+    .map((line) => Number(line.trim()))
+    .filter((pid) => Number.isInteger(pid) && pid > 0 && pid !== process.pid);
+}
+
+async function killProcessTree(pid) {
+  if (!Number.isInteger(pid) || pid <= 0) {
+    return;
+  }
+
+  if (process.platform === "win32") {
+    await runCommand("taskkill.exe", ["/pid", String(pid), "/T", "/F"], {
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    return;
+  }
+
+  try {
+    process.kill(pid, "SIGTERM");
+  } catch {}
+}
+
+async function cleanupStaleProjectServers() {
+  const readyPort = await findReadyPixelArtPort();
+  if (readyPort !== null) {
+    return readyPort;
+  }
+
+  const processIds = await getProjectNextProcessIds();
+  if (processIds.length === 0) {
+    return null;
+  }
+
+  console.log("Cleaning up stale AI Pixel Art server processes...");
+  await Promise.all(processIds.map((pid) => killProcessTree(pid)));
+  await sleep(1000);
+  return null;
+}
+
 async function choosePort() {
-  for (let port = preferredPort; port < preferredPort + 20; port += 1) {
+  for (let port = preferredPort; port <= portSearchLimit; port += 1) {
     if (await isPixelArtReady(port)) {
       return { port, existing: true };
     }
@@ -76,7 +178,7 @@ async function choosePort() {
   }
 
   throw new Error(
-    `Could not find an available port from ${preferredPort} to ${preferredPort + 19}.`,
+    `Could not find an available port from ${preferredPort} to ${portSearchLimit}.`,
   );
 }
 
@@ -175,6 +277,14 @@ function stopServer() {
 }
 
 async function main() {
+  const existingReadyPort = await cleanupStaleProjectServers();
+  if (existingReadyPort !== null) {
+    const existingUrl = `http://127.0.0.1:${existingReadyPort}`;
+    console.log(`AI Pixel Art is already running at ${existingUrl}`);
+    openBrowser(existingUrl);
+    return;
+  }
+
   const { port, existing } = await choosePort();
   const url = `http://127.0.0.1:${port}`;
 
@@ -209,6 +319,16 @@ process.on("SIGINT", () => {
 });
 
 process.on("SIGTERM", () => {
+  stopServer();
+  process.exit(0);
+});
+
+process.on("SIGHUP", () => {
+  stopServer();
+  process.exit(0);
+});
+
+process.on("SIGBREAK", () => {
   stopServer();
   process.exit(0);
 });
