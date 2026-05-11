@@ -1718,6 +1718,7 @@ export default function Home() {
               sprite={sprite}
               showGrid={showGrid}
               onPixelAction={handlePixelAction}
+              onResize={handleResize}
               onStrokeStart={handleStrokeStart}
               onStrokeEnd={handleStrokeEnd}
             />
