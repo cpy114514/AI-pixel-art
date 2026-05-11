@@ -47,6 +47,16 @@ if not exist "node_modules\electron" (
   )
 )
 
+if not exist ".next\BUILD_ID" (
+  echo Preparing optimized app. This can take a minute the first time only...
+  call npm run build
+  if errorlevel 1 (
+    echo App build failed.
+    pause
+    exit /b 1
+  )
+)
+
 echo Starting AI Pixel Art desktop app...
 
 call npm run desktop

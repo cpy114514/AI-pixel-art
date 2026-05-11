@@ -21,7 +21,9 @@ Or use GitHub's green **Code** button and choose **Download ZIP**.
 
 After installation, you can start it again from the desktop shortcut **AI Pixel Art**, or by double-clicking `start.bat`.
 
-The app runs in its own desktop window. A local engine still runs at:
+The first launch may take a minute because it prepares an optimized local build. Later launches are faster.
+
+The app runs in its own desktop window. A local engine still runs at the first available local port, usually:
 
 ```text
 http://127.0.0.1:3000
