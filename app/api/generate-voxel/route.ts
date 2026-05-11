@@ -15,6 +15,7 @@ type GenerateVoxelRequest = {
   apiUrl?: string;
   apiKey?: string;
   model?: string;
+  accentColor?: string;
 };
 
 function errorResponse(message: string, status: number, details?: unknown) {
@@ -49,12 +50,14 @@ function buildVoxelInstruction(
   height: number,
   depth: number,
   stylePreset?: string,
+  accentColor?: string,
 ) {
   return [
     "Create one 3D pixel-art voxel game asset as strict JSON.",
     `Exact voxel grid: width=${width}, height=${height}, depth=${depth}.`,
     "Coordinate order: voxels[z][y][x], where z is front-to-back layers, y is top-to-bottom rows, x is left-to-right columns.",
     `Style: ${stylePreset || "Modern game sprite"}.`,
+    accentColor ? `Preferred main/accent color: ${accentColor}. Build a small palette around it with highlights, midtones, and shadows.` : "",
     `Request: ${prompt}`,
     "Use transparent for empty space. Use #RRGGBB for solid cube colors only.",
     "Build a recognizable 3D silhouette with volume, not a flat 2D sheet. Use depth layers for front, middle, and back forms.",
@@ -63,7 +66,9 @@ function buildVoxelInstruction(
     `Return exactly ${depth} layers, each layer has exactly ${height} rows, each row has exactly ${width} color strings.`,
     'Output only JSON with exactly this shape: {"width":number,"height":number,"depth":number,"voxels":[[["#RRGGBB","transparent"]]]}',
     "No markdown, no comments, no explanations, no ellipses, no extra keys.",
-  ].join("\n");
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 function buildUpstreamBody(
@@ -160,7 +165,14 @@ export async function POST(request: NextRequest) {
     return errorResponse("API URL is invalid.", 400, { apiUrl });
   }
 
-  const instruction = buildVoxelInstruction(prompt, width, height, depth, body.stylePreset);
+  const instruction = buildVoxelInstruction(
+    prompt,
+    width,
+    height,
+    depth,
+    body.stylePreset,
+    body.accentColor,
+  );
   let upstreamResponse: Response;
 
   try {

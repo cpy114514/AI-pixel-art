@@ -30,6 +30,85 @@ export function createBlankVoxelSprite(width: number, height: number, depth: num
   };
 }
 
+export function cloneVoxelSprite(voxel: VoxelSprite): VoxelSprite {
+  return {
+    width: voxel.width,
+    height: voxel.height,
+    depth: voxel.depth,
+    voxels: voxel.voxels.map((layer) => layer.map((row) => [...row])),
+  };
+}
+
+export function setVoxelColor(
+  voxel: VoxelSprite,
+  x: number,
+  y: number,
+  z: number,
+  color: PixelColor,
+): VoxelSprite {
+  if (x < 0 || y < 0 || z < 0 || x >= voxel.width || y >= voxel.height || z >= voxel.depth) {
+    return voxel;
+  }
+
+  const next = cloneVoxelSprite(voxel);
+  next.voxels[z][y][x] = color;
+  return next;
+}
+
+export function fillVoxelLayer(voxel: VoxelSprite, z: number, color: PixelColor): VoxelSprite {
+  if (z < 0 || z >= voxel.depth) {
+    return voxel;
+  }
+
+  const next = cloneVoxelSprite(voxel);
+  next.voxels[z] = Array.from({ length: voxel.height }, () =>
+    Array.from({ length: voxel.width }, () => color),
+  );
+  return next;
+}
+
+export function floodFillVoxelLayer(
+  voxel: VoxelSprite,
+  startX: number,
+  startY: number,
+  z: number,
+  color: PixelColor,
+): VoxelSprite {
+  if (
+    startX < 0 ||
+    startY < 0 ||
+    z < 0 ||
+    startX >= voxel.width ||
+    startY >= voxel.height ||
+    z >= voxel.depth
+  ) {
+    return voxel;
+  }
+
+  const targetColor = voxel.voxels[z][startY][startX];
+  if (targetColor === color) {
+    return voxel;
+  }
+
+  const next = cloneVoxelSprite(voxel);
+  const stack: Array<[number, number]> = [[startX, startY]];
+
+  while (stack.length > 0) {
+    const [x, y] = stack.pop() as [number, number];
+    if (x < 0 || y < 0 || x >= voxel.width || y >= voxel.height) {
+      continue;
+    }
+    if (next.voxels[z][y][x] !== targetColor) {
+      continue;
+    }
+
+    next.voxels[z][y][x] = color;
+    stack.push([x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]);
+  }
+
+  return next;
+}
+
 export function repairVoxelSprite(
   input: unknown,
   fallbackColor: PixelColor = TRANSPARENT,

@@ -14,10 +14,14 @@ import {
   Box,
   Copy,
   Download,
+  Eraser,
   Film,
   ImageDown,
   KeyRound,
   Link2,
+  PaintBucket,
+  Paintbrush,
+  Pipette,
   Plus,
   ShieldCheck,
   Trash2,
@@ -27,6 +31,7 @@ import { encodeSpritesAnimatedGif } from "@/lib/exportGif";
 import PixelCanvas from "@/components/PixelCanvas";
 import Toolbar, { type DrawTool } from "@/components/Toolbar";
 import VoxelCanvas from "@/components/VoxelCanvas";
+import VoxelLayerEditor from "@/components/VoxelLayerEditor";
 import {
   createBlankSprite,
   createVisibleSprite,
@@ -38,9 +43,13 @@ import {
   type PixelSprite,
 } from "@/lib/pixelUtils";
 import {
+  cloneVoxelSprite,
   countVisibleVoxels,
   createBlankVoxelSprite,
+  fillVoxelLayer,
+  floodFillVoxelLayer,
   repairVoxelSprite,
+  setVoxelColor,
   type VoxelSprite,
 } from "@/lib/voxelUtils";
 
@@ -235,6 +244,17 @@ const stylePresets = [
   "Cute mobile game",
   "Dark fantasy item",
   "High contrast icon",
+] as const;
+
+const colorSwatches = [
+  "#0f172a",
+  "#ffffff",
+  "#38bdf8",
+  "#22c55e",
+  "#facc15",
+  "#ef4444",
+  "#a855f7",
+  "#92400e",
 ] as const;
 
 const providerPresets = [
@@ -854,6 +874,8 @@ export default function Home() {
   const [voxelSprite, setVoxelSprite] = useState<VoxelSprite>(() =>
     createBlankVoxelSprite(8, 8, 8),
   );
+  const [activeVoxelLayer, setActiveVoxelLayer] = useState(0);
+  const [voxelPaintTool, setVoxelPaintTool] = useState<DrawTool>("brush");
   const [isGeneratingVoxel, setIsGeneratingVoxel] = useState(false);
   const [leftPanelWidth, setLeftPanelWidth] = useState(360);
   const [rightPanelWidth, setRightPanelWidth] = useState(320);
@@ -881,6 +903,7 @@ export default function Home() {
     clodModels,
     hasLoaded,
   } = localState;
+  const activeVoxelLayerIndex = Math.min(activeVoxelLayer, Math.max(0, voxelSprite.depth - 1));
 
   useEffect(() => {
     const loadLocalState = window.setTimeout(() => {
@@ -1039,6 +1062,78 @@ export default function Home() {
           ? `Erased pixel (${x}, ${y}).`
           : `Painted pixel (${x}, ${y}) with ${color}.`,
     });
+  }
+
+  function handleVoxelAction(x: number, y: number) {
+    const z = activeVoxelLayerIndex;
+    if (voxelPaintTool === "eyedropper") {
+      const color = voxelSprite.voxels[z][y][x];
+      setSelectedColor(color);
+      setVoxelPaintTool("brush");
+      setStatus({ type: "success", message: `Picked ${color} from voxel (${x}, ${y}, ${z}).` });
+      return;
+    }
+
+    if (voxelPaintTool === "fill") {
+      const next = floodFillVoxelLayer(voxelSprite, x, y, z, selectedColor);
+      if (JSON.stringify(next) !== JSON.stringify(voxelSprite)) {
+        setVoxelSprite(next);
+        setStatus({
+          type: "success",
+          message: `Filled voxel layer ${z + 1} with ${selectedColor}.`,
+        });
+      }
+      return;
+    }
+
+    const color = voxelPaintTool === "eraser" ? TRANSPARENT : selectedColor;
+    setVoxelSprite((current) => setVoxelColor(current, x, y, z, color));
+    setStatus({
+      type: "success",
+      message:
+        voxelPaintTool === "eraser"
+          ? `Erased voxel (${x}, ${y}, ${z}).`
+          : `Painted voxel (${x}, ${y}, ${z}) with ${color}.`,
+    });
+  }
+
+  function handleApplyVoxelSize() {
+    const width = parseVoxelSize(voxelWidth);
+    const height = parseVoxelSize(voxelHeight);
+    const depth = parseVoxelSize(voxelDepth);
+
+    if (!width || !height || !depth) {
+      setStatus({ type: "error", message: "Voxel size must be whole numbers from 2 to 16." });
+      return;
+    }
+
+    setVoxelSprite((current) => {
+      const next = createBlankVoxelSprite(width, height, depth);
+      const source = cloneVoxelSprite(current);
+      for (let z = 0; z < Math.min(source.depth, depth); z += 1) {
+        for (let y = 0; y < Math.min(source.height, height); y += 1) {
+          for (let x = 0; x < Math.min(source.width, width); x += 1) {
+            next.voxels[z][y][x] = source.voxels[z][y][x];
+          }
+        }
+      }
+      return next;
+    });
+    setActiveVoxelLayer((current) => Math.min(current, depth - 1));
+    setStatus({ type: "success", message: `Applied ${width}x${height}x${depth} voxel canvas.` });
+  }
+
+  function handleFillActiveVoxelLayer() {
+    setVoxelSprite((current) => fillVoxelLayer(current, activeVoxelLayerIndex, selectedColor));
+    setStatus({
+      type: "success",
+      message: `Filled voxel layer ${activeVoxelLayerIndex + 1} with ${selectedColor}.`,
+    });
+  }
+
+  function handleClearVoxelModel() {
+    setVoxelSprite(createBlankVoxelSprite(voxelSprite.width, voxelSprite.height, voxelSprite.depth));
+    setStatus({ type: "success", message: "Cleared the 3D voxel model." });
   }
 
   function handleUndo() {
@@ -1665,6 +1760,7 @@ export default function Home() {
         apiUrl,
         apiKey,
         model: apiModel,
+        accentColor: selectedColor === TRANSPARENT ? undefined : selectedColor,
       });
 
       if (!outcome.ok) {
@@ -1673,6 +1769,7 @@ export default function Home() {
       }
 
       setVoxelSprite(outcome.voxel);
+      setActiveVoxelLayer(0);
       setStatus({
         type: outcome.warnings.length > 0 ? "warning" : "success",
         message:
@@ -1947,8 +2044,114 @@ export default function Home() {
                   {countVisibleVoxels(voxelSprite)} cubes
                 </span>
               </div>
-              <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_280px]">
-                <VoxelCanvas voxel={voxelSprite} />
+              <div className="grid gap-3 2xl:grid-cols-[minmax(0,1fr)_320px]">
+                <div className="space-y-3">
+                  <VoxelCanvas voxel={voxelSprite} />
+                  <div className="grid gap-3 2xl:grid-cols-[minmax(0,1fr)_220px]">
+                    <VoxelLayerEditor
+                      layerIndex={activeVoxelLayerIndex}
+                      onVoxelAction={handleVoxelAction}
+                      voxel={voxelSprite}
+                    />
+                    <div className="space-y-3 rounded-md border border-slate-200 bg-slate-50 p-3">
+                      <label className="block space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs font-bold uppercase text-slate-500">
+                            Layer Z
+                          </span>
+                          <span className="text-xs font-bold text-slate-700">
+                            {activeVoxelLayerIndex + 1}/{voxelSprite.depth}
+                          </span>
+                        </div>
+                        <input
+                          className="w-full accent-cyan-600"
+                          max={Math.max(0, voxelSprite.depth - 1)}
+                          min={0}
+                          onChange={(event) => setActiveVoxelLayer(Number(event.target.value))}
+                          type="range"
+                          value={activeVoxelLayerIndex}
+                        />
+                      </label>
+                      <div className="grid grid-cols-4 gap-1">
+                        {[
+                          { id: "brush" as DrawTool, label: "Brush", icon: Paintbrush },
+                          { id: "eraser" as DrawTool, label: "Erase", icon: Eraser },
+                          { id: "fill" as DrawTool, label: "Fill", icon: PaintBucket },
+                          { id: "eyedropper" as DrawTool, label: "Pick", icon: Pipette },
+                        ].map((tool) => {
+                          const Icon = tool.icon;
+                          return (
+                            <button
+                              aria-label={`Voxel ${tool.label}`}
+                              className={`inline-flex h-9 items-center justify-center rounded-md border text-sm font-bold ${
+                                voxelPaintTool === tool.id
+                                  ? "border-cyan-500 bg-cyan-50 text-cyan-700"
+                                  : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                              }`}
+                              key={tool.id}
+                              onClick={() => setVoxelPaintTool(tool.id)}
+                              title={tool.label}
+                              type="button"
+                            >
+                              <Icon className="h-4 w-4" />
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <input
+                          aria-label="3D voxel paint color"
+                          className="h-9 w-11 cursor-pointer rounded-md border border-slate-200 bg-white p-1"
+                          onChange={(event) => setSelectedColor(event.target.value)}
+                          type="color"
+                          value={selectedColor === TRANSPARENT ? "#000000" : selectedColor.slice(0, 7)}
+                        />
+                        {colorSwatches.map((color) => (
+                          <button
+                            aria-label={`Use ${color} for 3D voxels`}
+                            className={`h-8 w-8 rounded-md border ${
+                              selectedColor === color
+                                ? "border-cyan-600 ring-2 ring-cyan-100"
+                                : "border-slate-200"
+                            }`}
+                            key={color}
+                            onClick={() => setSelectedColor(color)}
+                            style={{ backgroundColor: color }}
+                            type="button"
+                          />
+                        ))}
+                        <button
+                          aria-label="Use transparent for 3D voxels"
+                          className={`inline-flex h-8 w-8 items-center justify-center rounded-md border bg-white text-slate-500 ${
+                            selectedColor === TRANSPARENT
+                              ? "border-cyan-600 ring-2 ring-cyan-100"
+                              : "border-slate-200"
+                          }`}
+                          onClick={() => setSelectedColor(TRANSPARENT)}
+                          type="button"
+                        >
+                          <Eraser className="h-4 w-4" />
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          className="h-9 rounded-md border border-slate-200 bg-white px-2 text-xs font-bold text-slate-600 hover:bg-slate-50"
+                          onClick={handleFillActiveVoxelLayer}
+                          type="button"
+                        >
+                          Fill layer
+                        </button>
+                        <button
+                          className="h-9 rounded-md border border-slate-200 bg-white px-2 text-xs font-bold text-slate-600 hover:bg-slate-50"
+                          onClick={handleClearVoxelModel}
+                          type="button"
+                        >
+                          Clear 3D
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
                 <div className="space-y-3">
                   <textarea
                     className="min-h-24 w-full resize-none rounded-md border border-slate-200 bg-slate-50 p-3 text-sm leading-5 text-slate-800 outline-none transition focus:border-cyan-400 focus:bg-white focus:ring-2 focus:ring-cyan-100"
@@ -1991,6 +2194,13 @@ export default function Home() {
                       />
                     </label>
                   </div>
+                  <button
+                    className="h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-sm font-bold text-slate-600 hover:bg-slate-50"
+                    onClick={handleApplyVoxelSize}
+                    type="button"
+                  >
+                    Apply 3D size
+                  </button>
                   <button
                     className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md bg-slate-900 px-3 text-sm font-bold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
                     disabled={isGeneratingVoxel}
