@@ -10,26 +10,13 @@ type PixelCanvasProps = {
   onPixelAction: (x: number, y: number) => void;
   onStrokeStart: () => void;
   onStrokeEnd: () => void;
-  onResize: (width: number, height: number) => void;
 };
 
 const FALLBACK_CANVAS_SIZE = 640;
 const MIN_CELL_SIZE = 4;
-const MAX_CELL_SIZE = 56;
-const MAX_GRID_SIZE = 128;
-
-type ResizeMode = "right" | "bottom" | "corner";
-
-type ResizeDrag = {
-  mode: ResizeMode;
-  left: number;
-  top: number;
-  cellSize: number;
-  startWidth: number;
-  startHeight: number;
-  lastWidth: number;
-  lastHeight: number;
-};
+const MAX_BASE_CELL_SIZE = 56;
+const MIN_ZOOM = 0.2;
+const MAX_ZOOM = 10;
 
 function drawTransparency(ctx: CanvasRenderingContext2D, x: number, y: number, size: number) {
   const half = size / 2;
@@ -46,17 +33,16 @@ export default function PixelCanvas({
   onPixelAction,
   onStrokeStart,
   onStrokeEnd,
-  onResize,
 }: PixelCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const isPointerDownRef = useRef(false);
   const lastCellRef = useRef<string | null>(null);
-  const resizeDragRef = useRef<ResizeDrag | null>(null);
   const [containerSize, setContainerSize] = useState({
     width: FALLBACK_CANVAS_SIZE,
     height: FALLBACK_CANVAS_SIZE,
   });
+  const [zoom, setZoom] = useState(1);
 
   useLayoutEffect(() => {
     const container = containerRef.current;
@@ -79,17 +65,18 @@ export default function PixelCanvas({
     return () => observer.disconnect();
   }, []);
 
-  const cellSize = useMemo(
+  const baseCellSize = useMemo(
     () => {
-      const usableWidth = Math.max(1, containerSize.width - 72);
-      const usableHeight = Math.max(1, containerSize.height - 72);
+      const usableWidth = Math.max(1, containerSize.width - 40);
+      const usableHeight = Math.max(1, containerSize.height - 40);
       const fittedCellSize = Math.floor(
         Math.min(usableWidth / sprite.width, usableHeight / sprite.height),
       );
-      return Math.min(MAX_CELL_SIZE, Math.max(MIN_CELL_SIZE, fittedCellSize));
+      return Math.min(MAX_BASE_CELL_SIZE, Math.max(MIN_CELL_SIZE, fittedCellSize));
     },
     [containerSize.height, containerSize.width, sprite.height, sprite.width],
   );
+  const cellSize = Math.max(1, Math.round(baseCellSize * zoom));
 
   useLayoutEffect(() => {
     const canvas = canvasRef.current;
@@ -173,69 +160,20 @@ export default function PixelCanvas({
     onPixelAction(cell.x, cell.y);
   }
 
-  function clampGridSize(value: number) {
-    return Math.min(MAX_GRID_SIZE, Math.max(1, value));
-  }
-
-  function startResize(event: React.PointerEvent<HTMLButtonElement>, mode: ResizeMode) {
-    const canvas = canvasRef.current;
-    if (!canvas) {
-      return;
-    }
-
-    event.preventDefault();
-    event.stopPropagation();
-    event.currentTarget.setPointerCapture(event.pointerId);
-    const rect = canvas.getBoundingClientRect();
-    resizeDragRef.current = {
-      mode,
-      left: rect.left,
-      top: rect.top,
-      cellSize,
-      startWidth: sprite.width,
-      startHeight: sprite.height,
-      lastWidth: sprite.width,
-      lastHeight: sprite.height,
-    };
-  }
-
-  function updateResize(event: React.PointerEvent<HTMLButtonElement>) {
-    const drag = resizeDragRef.current;
-    if (!drag) {
-      return;
-    }
-
-    event.preventDefault();
-    event.stopPropagation();
-    const pointerWidth = clampGridSize(Math.round((event.clientX - drag.left) / drag.cellSize));
-    const pointerHeight = clampGridSize(Math.round((event.clientY - drag.top) / drag.cellSize));
-    const nextWidth =
-      drag.mode === "right" || drag.mode === "corner" ? pointerWidth : drag.startWidth;
-    const nextHeight =
-      drag.mode === "bottom" || drag.mode === "corner" ? pointerHeight : drag.startHeight;
-
-    if (nextWidth === drag.lastWidth && nextHeight === drag.lastHeight) {
-      return;
-    }
-
-    drag.lastWidth = nextWidth;
-    drag.lastHeight = nextHeight;
-    onResize(nextWidth, nextHeight);
-  }
-
-  function endResize(event: React.PointerEvent<HTMLButtonElement>) {
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId);
-    }
-    resizeDragRef.current = null;
-  }
-
   return (
     <div
       className="flex min-h-0 flex-1 items-center justify-center overflow-auto rounded-lg border border-slate-200 bg-slate-100 p-5 shadow-inner"
+      onWheel={(event) => {
+        event.preventDefault();
+        const direction = event.deltaY > 0 ? -1 : 1;
+        setZoom((current) => {
+          const next = current * (direction > 0 ? 1.12 : 1 / 1.12);
+          return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, next));
+        });
+      }}
       ref={containerRef}
     >
-      <div className="relative inline-flex max-h-full max-w-full items-start justify-start pr-5 pb-5">
+      <div className="relative inline-flex max-h-full max-w-full items-start justify-start">
         <canvas
           ref={canvasRef}
           aria-label={`${sprite.width} by ${sprite.height} pixel canvas`}
@@ -266,36 +204,9 @@ export default function PixelCanvas({
             onStrokeEnd();
           }}
         />
-        <button
-          aria-label="Drag to resize grid width"
-          className="absolute top-0 bottom-5 right-1 w-4 cursor-ew-resize rounded border border-cyan-200 bg-cyan-100/80 hover:bg-cyan-200"
-          onPointerCancel={endResize}
-          onPointerDown={(event) => startResize(event, "right")}
-          onPointerMove={updateResize}
-          onPointerUp={endResize}
-          title="Resize width"
-          type="button"
-        />
-        <button
-          aria-label="Drag to resize grid height"
-          className="absolute right-5 bottom-1 left-0 h-4 cursor-ns-resize rounded border border-cyan-200 bg-cyan-100/80 hover:bg-cyan-200"
-          onPointerCancel={endResize}
-          onPointerDown={(event) => startResize(event, "bottom")}
-          onPointerMove={updateResize}
-          onPointerUp={endResize}
-          title="Resize height"
-          type="button"
-        />
-        <button
-          aria-label="Drag to resize grid width and height"
-          className="absolute right-0 bottom-0 h-5 w-5 cursor-nwse-resize rounded border border-cyan-300 bg-cyan-500 shadow-sm hover:bg-cyan-600"
-          onPointerCancel={endResize}
-          onPointerDown={(event) => startResize(event, "corner")}
-          onPointerMove={updateResize}
-          onPointerUp={endResize}
-          title="Resize width and height"
-          type="button"
-        />
+        <div className="pointer-events-none absolute left-2 top-2 rounded border border-slate-200 bg-white/90 px-2 py-1 text-[11px] font-bold text-slate-500 shadow-sm">
+          {Math.round(zoom * 100)}%
+        </div>
       </div>
     </div>
   );

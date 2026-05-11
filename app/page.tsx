@@ -1,6 +1,13 @@
 ﻿"use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  type CSSProperties,
+  type PointerEvent as ReactPointerEvent,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   ChevronDown,
   ChevronUp,
@@ -263,6 +270,19 @@ type SpriteFrame = {
   id: string;
   name: string;
   sprite: PixelSprite;
+};
+
+type PanelResizeSide = "left" | "right";
+
+type PanelResizeDrag = {
+  side: PanelResizeSide;
+  startX: number;
+  startWidth: number;
+};
+
+type AppLayoutStyle = CSSProperties & {
+  "--left-panel": string;
+  "--right-panel": string;
 };
 
 function getStoredApiSettings(): StoredApiSettings {
@@ -766,6 +786,9 @@ export default function Home() {
   const [animationDescription, setAnimationDescription] = useState("");
   const [referenceImage, setReferenceImage] = useState<ReferenceImage | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [leftPanelWidth, setLeftPanelWidth] = useState(360);
+  const [rightPanelWidth, setRightPanelWidth] = useState(320);
+  const panelResizeDragRef = useRef<PanelResizeDrag | null>(null);
   const [status, setStatus] = useState<Status>({
     type: "idle",
     message: "Ready for JSON import, manual painting, or AI generation.",
@@ -1592,6 +1615,50 @@ export default function Home() {
   }[status.type];
   const selectedProviderName =
     providerPresets.find((provider) => provider.id === selectedProvider)?.name ?? "Custom API";
+  const appLayoutStyle: AppLayoutStyle = {
+    "--left-panel": `${leftPanelWidth}px`,
+    "--right-panel": `${rightPanelWidth}px`,
+  };
+
+  function clampPanelWidth(value: number, min: number, max: number) {
+    return Math.min(max, Math.max(min, value));
+  }
+
+  function startPanelResize(
+    event: ReactPointerEvent<HTMLButtonElement>,
+    side: PanelResizeSide,
+  ) {
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    panelResizeDragRef.current = {
+      side,
+      startX: event.clientX,
+      startWidth: side === "left" ? leftPanelWidth : rightPanelWidth,
+    };
+  }
+
+  function updatePanelResize(event: ReactPointerEvent<HTMLButtonElement>) {
+    const drag = panelResizeDragRef.current;
+    if (!drag) {
+      return;
+    }
+
+    event.preventDefault();
+    const deltaX = event.clientX - drag.startX;
+    if (drag.side === "left") {
+      setLeftPanelWidth(clampPanelWidth(drag.startWidth + deltaX, 240, 560));
+      return;
+    }
+
+    setRightPanelWidth(clampPanelWidth(drag.startWidth - deltaX, 240, 520));
+  }
+
+  function endPanelResize(event: ReactPointerEvent<HTMLButtonElement>) {
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    panelResizeDragRef.current = null;
+  }
 
   return (
     <main className="min-h-screen bg-[#f6f8fb] text-slate-950">
@@ -1619,7 +1686,10 @@ export default function Home() {
           </div>
         </header>
 
-        <div className="grid flex-1 gap-4 lg:min-h-0 lg:grid-cols-[360px_minmax(0,1fr)_320px]">
+        <div
+          className="grid flex-1 grid-cols-1 gap-y-4 lg:min-h-0 lg:grid-cols-[var(--left-panel)_8px_minmax(360px,1fr)_8px_var(--right-panel)]"
+          style={appLayoutStyle}
+        >
           <AIPanel
             prompt={prompt}
             editInstruction={editInstruction}
@@ -1654,6 +1724,18 @@ export default function Home() {
               setLocalState((current) => ({ ...current, spriteHistory: [] }));
               setStatus({ type: "success", message: "Cleared generation history." });
             }}
+          />
+
+          <button
+            aria-label="Drag to resize left panel"
+            className="hidden cursor-col-resize rounded bg-slate-200 transition hover:bg-cyan-300 lg:block"
+            onDoubleClick={() => setLeftPanelWidth(360)}
+            onPointerCancel={endPanelResize}
+            onPointerDown={(event) => startPanelResize(event, "left")}
+            onPointerMove={updatePanelResize}
+            onPointerUp={endPanelResize}
+            title="Resize left panel"
+            type="button"
           />
 
           <section className="flex min-h-[620px] flex-col gap-3 lg:min-h-0">
@@ -1718,11 +1800,22 @@ export default function Home() {
               sprite={sprite}
               showGrid={showGrid}
               onPixelAction={handlePixelAction}
-              onResize={handleResize}
               onStrokeStart={handleStrokeStart}
               onStrokeEnd={handleStrokeEnd}
             />
           </section>
+
+          <button
+            aria-label="Drag to resize right panel"
+            className="hidden cursor-col-resize rounded bg-slate-200 transition hover:bg-cyan-300 lg:block"
+            onDoubleClick={() => setRightPanelWidth(320)}
+            onPointerCancel={endPanelResize}
+            onPointerDown={(event) => startPanelResize(event, "right")}
+            onPointerMove={updatePanelResize}
+            onPointerUp={endPanelResize}
+            title="Resize right panel"
+            type="button"
+          />
 
           <aside className="flex min-h-0 flex-col gap-4 overflow-auto rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
             <section className="space-y-3">
