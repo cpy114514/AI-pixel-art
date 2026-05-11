@@ -855,6 +855,17 @@ export default function Home() {
     applySprite(nextSprite, nextStatus);
   }
 
+  function applySpriteAsNewImage(nextSprite: PixelSprite, nextStatus: Status) {
+    const nextFrame = createSpriteFrame(nextSprite, 1, "Frame 1");
+    setFrames([nextFrame]);
+    setActiveFrameIndex(0);
+    setSprite(cloneSprite(nextFrame.sprite));
+    setUndoStack([]);
+    setRedoStack([]);
+    strokeSnapshotRef.current = null;
+    setStatus(nextStatus);
+  }
+
   function applyEditedFrames(nextFrames: SpriteFrame[], nextStatus: Status) {
     const nextActiveIndex = Math.min(activeFrameIndex, nextFrames.length - 1);
     const nextActiveFrame = nextFrames[nextActiveIndex];
@@ -1291,8 +1302,16 @@ export default function Home() {
     const requestPrompt =
       prompt.trim() || "Convert the reference photo into a polished pixel-art game sprite.";
 
-    await submitSpriteAiRequest({
-      payload: {
+    setIsGenerating(true);
+    setStatus({
+      type: "idle",
+      message: referenceImage
+        ? "Calling /api/generate-sprite with photo reference..."
+        : "Calling /api/generate-sprite...",
+    });
+
+    try {
+      const outcome = await fetchSpriteAiFromApi({
         mode: "generate",
         prompt: requestPrompt,
         stylePreset,
@@ -1303,14 +1322,32 @@ export default function Home() {
         apiKey,
         model: apiModel,
         referenceImageDataUrl: referenceImage?.dataUrl,
-      },
-      idleMessage: referenceImage
-        ? "Calling /api/generate-sprite with photo reference..."
-        : "Calling /api/generate-sprite...",
-      successMessage: `Generated ${sprite.width}x${sprite.height} sprite.`,
-      historyPrompt: requestPrompt,
-      errorPrefix: "AI generation failed",
-    });
+      });
+
+      if (!outcome.ok) {
+        setStatus({ type: "error", message: `AI generation failed: ${outcome.message}` });
+        return;
+      }
+
+      const nextStatus: Status = {
+        type: outcome.warnings.length > 0 ? "warning" : "success",
+        message:
+          outcome.warnings.join(" ") ||
+          `Generated ${sprite.width}x${sprite.height} sprite as a new image.`,
+      };
+      applySpriteAsNewImage(outcome.sprite, nextStatus);
+      saveGeneratedSpriteToHistory(outcome.sprite, requestPrompt);
+    } catch (error) {
+      setStatus({
+        type: "error",
+        message:
+          error instanceof Error
+            ? `AI generation failed: ${error.message}`
+            : "AI generation failed.",
+      });
+    } finally {
+      setIsGenerating(false);
+    }
   }
 
   async function handleEditCurrentSprite() {
