@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import http from "node:http";
+import net from "node:net";
 
 const preferredPort = Number(process.env.AI_PIXEL_ART_PORT ?? 3000);
 let serverProcess;
@@ -35,19 +36,19 @@ function requestJson(url) {
   });
 }
 
-function isPortOccupied(port) {
+function canListenOnPort(port) {
   return new Promise((resolve) => {
-    const request = http.get(`http://127.0.0.1:${port}`, (response) => {
-      response.resume();
-      resolve(true);
-    });
+    const tester = net.createServer();
 
-    request.setTimeout(800, () => {
-      request.destroy();
+    tester.once("error", () => {
       resolve(false);
     });
 
-    request.on("error", () => resolve(false));
+    tester.once("listening", () => {
+      tester.close(() => resolve(true));
+    });
+
+    tester.listen(port, "127.0.0.1");
   });
 }
 
@@ -65,9 +66,10 @@ async function choosePort() {
     if (await isPixelArtReady(port)) {
       return { port, existing: true };
     }
-    if (!(await isPortOccupied(port))) {
+    if (await canListenOnPort(port)) {
       return { port, existing: false };
     }
+    console.log(`Port ${port} is already in use; trying ${port + 1}.`);
   }
 
   throw new Error(
