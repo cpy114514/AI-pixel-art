@@ -15,8 +15,6 @@ type PixelCanvasProps = {
 const FALLBACK_CANVAS_SIZE = 640;
 const MIN_CELL_SIZE = 4;
 const MAX_BASE_CELL_SIZE = 56;
-const MIN_ZOOM = 0.2;
-const MAX_ZOOM = 10;
 
 function drawTransparency(ctx: CanvasRenderingContext2D, x: number, y: number, size: number) {
   const half = size / 2;
@@ -42,7 +40,6 @@ export default function PixelCanvas({
     width: FALLBACK_CANVAS_SIZE,
     height: FALLBACK_CANVAS_SIZE,
   });
-  const [zoom, setZoom] = useState(1);
 
   useLayoutEffect(() => {
     const container = containerRef.current;
@@ -76,7 +73,7 @@ export default function PixelCanvas({
     },
     [containerSize.height, containerSize.width, sprite.height, sprite.width],
   );
-  const cellSize = Math.max(1, Math.round(baseCellSize * zoom));
+  const cellSize = baseCellSize;
 
   useLayoutEffect(() => {
     const canvas = canvasRef.current;
@@ -163,14 +160,6 @@ export default function PixelCanvas({
   return (
     <div
       className="flex min-h-0 flex-1 items-center justify-center overflow-auto rounded-lg border border-slate-200 bg-slate-100 p-5 shadow-inner"
-      onWheel={(event) => {
-        event.preventDefault();
-        const direction = event.deltaY > 0 ? -1 : 1;
-        setZoom((current) => {
-          const next = current * (direction > 0 ? 1.12 : 1 / 1.12);
-          return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, next));
-        });
-      }}
       ref={containerRef}
     >
       <div className="relative inline-flex max-h-full max-w-full items-start justify-start">
@@ -204,9 +193,6 @@ export default function PixelCanvas({
             onStrokeEnd();
           }}
         />
-        <div className="pointer-events-none absolute left-2 top-2 rounded border border-slate-200 bg-white/90 px-2 py-1 text-[11px] font-bold text-slate-500 shadow-sm">
-          {Math.round(zoom * 100)}%
-        </div>
       </div>
     </div>
   );
