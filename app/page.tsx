@@ -18,7 +18,6 @@ import PixelCanvas from "@/components/PixelCanvas";
 import Toolbar, { type DrawTool } from "@/components/Toolbar";
 import {
   createBlankSprite,
-  exampleSprites,
   resizeSprite,
   setPixelColor,
   spriteToJson,
@@ -636,13 +635,13 @@ function FrameThumbnail({
 }
 
 export default function Home() {
-  const [sprite, setSprite] = useState<PixelSprite>(exampleSprites.slime);
-  const [frames, setFrames] = useState<SpriteFrame[]>([
-    { id: "frame-1", name: "Frame 1", sprite: cloneSprite(exampleSprites.slime) },
+  const [sprite, setSprite] = useState<PixelSprite>(() => createBlankSprite(16, 16));
+  const [frames, setFrames] = useState<SpriteFrame[]>(() => [
+    { id: "frame-1", name: "Frame 1", sprite: createBlankSprite(16, 16) },
   ]);
   const [activeFrameIndex, setActiveFrameIndex] = useState(0);
   const [prompt, setPrompt] = useState(
-    "Draw a polished blue slime game sprite with a clear silhouette, dark outline, glossy top-left highlight, soft lower-right shadow, expressive face, and several blue color ramps.",
+    "Draw a polished game sprite with a clear silhouette, dark outline, top-left highlight, lower-right shadow, readable details, and a small consistent color palette.",
   );
   const [stylePreset, setStylePreset] = useState<(typeof stylePresets)[number]>(
     "Modern game sprite",

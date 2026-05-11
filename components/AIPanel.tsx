@@ -191,7 +191,7 @@ export default function AIPanel({
               className="min-h-24 w-full resize-none rounded-md border border-slate-200 bg-slate-50 p-3 text-sm leading-5 text-slate-800 outline-none transition focus:border-cyan-400 focus:bg-white focus:ring-2 focus:ring-cyan-100"
               value={prompt}
               onChange={(event) => onPromptChange(event.target.value)}
-              placeholder="Draw a 16x16 blue slime, or upload a photo and write what to preserve."
+              placeholder="Draw a small sword, a coin, a character, or upload a photo and write what to preserve."
             />
             <div className="space-y-2 rounded-md border border-slate-200 bg-slate-50 p-3">
               <div className="flex items-center justify-between gap-2">
