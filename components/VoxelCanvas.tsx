@@ -157,7 +157,7 @@ export default function VoxelCanvas({ voxel }: VoxelCanvasProps) {
       }
     }
 
-    const geometry = new THREE.BoxGeometry(0.94, 0.94, 0.94);
+    const geometry = new THREE.BoxGeometry(1, 1, 1);
     const material = new THREE.MeshStandardMaterial({
       roughness: 0.72,
       metalness: 0.02,

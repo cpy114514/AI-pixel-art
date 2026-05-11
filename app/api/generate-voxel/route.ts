@@ -55,16 +55,17 @@ function buildVoxelInstruction(
   return [
     "Create one 3D pixel-art voxel game asset as strict JSON.",
     `Exact voxel grid: width=${width}, height=${height}, depth=${depth}.`,
+    "The 3D model is only a nested color-code list. Each non-transparent color string becomes one full cube in the renderer, touching its neighboring cubes with no spacing.",
     "Coordinate order: voxels[z][y][x], where z is front-to-back layers, y is top-to-bottom rows, x is left-to-right columns.",
     `Style: ${stylePreset || "Modern game sprite"}.`,
     accentColor ? `Preferred main/accent color: ${accentColor}. Build a small palette around it with highlights, midtones, and shadows.` : "",
     `Request: ${prompt}`,
-    "Use transparent for empty space. Use #RRGGBB for solid cube colors only.",
+    'Use "transparent" for empty space. Use #RRGGBB hex strings for solid cube colors only.',
     "Build a recognizable 3D silhouette with volume, not a flat 2D sheet. Use depth layers for front, middle, and back forms.",
     "Lighting: top-left-front light; darker colors on lower, right, and back voxels; highlights on upper/front voxels.",
     "Keep the model centered with empty transparent padding where useful. Avoid random noise, text, labels, oversized solid blocks, and single-color output.",
     `Return exactly ${depth} layers, each layer has exactly ${height} rows, each row has exactly ${width} color strings.`,
-    'Output only JSON with exactly this shape: {"width":number,"height":number,"depth":number,"voxels":[[["#RRGGBB","transparent"]]]}',
+    'Output only JSON with exactly this shape: {"width":number,"height":number,"depth":number,"voxels":[[["#RRGGBB","transparent"]]]}.',
     "No markdown, no comments, no explanations, no ellipses, no extra keys.",
   ]
     .filter(Boolean)
