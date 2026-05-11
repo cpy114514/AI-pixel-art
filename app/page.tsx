@@ -767,6 +767,18 @@ export default function Home() {
     applySprite(nextSprite, nextStatus);
   }
 
+  function applyEditedFrames(nextFrames: SpriteFrame[], nextStatus: Status) {
+    const nextActiveIndex = Math.min(activeFrameIndex, nextFrames.length - 1);
+    const nextActiveFrame = nextFrames[nextActiveIndex];
+    setFrames(nextFrames);
+    setActiveFrameIndex(nextActiveIndex);
+    setSprite(cloneSprite(nextActiveFrame.sprite));
+    setUndoStack([]);
+    setRedoStack([]);
+    strokeSnapshotRef.current = null;
+    setStatus(nextStatus);
+  }
+
   function handleStrokeStart() {
     if (activeTool !== "brush" && activeTool !== "eraser") {
       return;
@@ -1197,25 +1209,91 @@ export default function Home() {
       return;
     }
 
-    await submitSpriteAiRequest({
-      payload: {
-        mode: "edit",
-        editInstruction: requestEditInstruction,
-        stylePreset,
-        width: sprite.width,
-        height: sprite.height,
-        provider: selectedProvider,
-        apiUrl,
-        apiKey,
-        model: apiModel,
-        currentSprite: sprite,
-      },
-      idleMessage: "Calling /api/generate-sprite to edit current sprite...",
-      successMessage: `Edited ${sprite.width}x${sprite.height} sprite.`,
-      historyPrompt: `Edit: ${requestEditInstruction}`,
-      errorPrefix: "AI edit failed",
-      commitResult: true,
+    if (frames.length <= 1) {
+      await submitSpriteAiRequest({
+        payload: {
+          mode: "edit",
+          editInstruction: requestEditInstruction,
+          stylePreset,
+          width: sprite.width,
+          height: sprite.height,
+          provider: selectedProvider,
+          apiUrl,
+          apiKey,
+          model: apiModel,
+          currentSprite: sprite,
+        },
+        idleMessage: "Calling /api/generate-sprite to edit current sprite...",
+        successMessage: `Edited ${sprite.width}x${sprite.height} sprite.`,
+        historyPrompt: `Edit: ${requestEditInstruction}`,
+        errorPrefix: "AI edit failed",
+        commitResult: true,
+      });
+      return;
+    }
+
+    setIsGenerating(true);
+    setStatus({
+      type: "idle",
+      message: `AI editing ${frames.length} frames...`,
     });
+
+    try {
+      const editedFrames: SpriteFrame[] = [];
+      const warnings: string[] = [];
+
+      for (let index = 0; index < frames.length; index += 1) {
+        const frame = frames[index];
+        setStatus({
+          type: "idle",
+          message: `AI editing frame ${index + 1} of ${frames.length}...`,
+        });
+
+        const outcome = await fetchSpriteAiFromApi({
+          mode: "edit",
+          editInstruction: requestEditInstruction,
+          stylePreset,
+          width: frame.sprite.width,
+          height: frame.sprite.height,
+          provider: selectedProvider,
+          apiUrl,
+          apiKey,
+          model: apiModel,
+          currentSprite: frame.sprite,
+        });
+
+        if (!outcome.ok) {
+          setStatus({
+            type: "error",
+            message: `AI edit failed on frame ${index + 1}: ${outcome.message}`,
+          });
+          return;
+        }
+
+        editedFrames.push({ ...frame, sprite: cloneSprite(outcome.sprite) });
+        warnings.push(...outcome.warnings.map((warning) => `Frame ${index + 1}: ${warning}`));
+      }
+
+      const nextStatus: Status = {
+        type: warnings.length > 0 ? "warning" : "success",
+        message:
+          warnings.join(" ") ||
+          `Edited all ${editedFrames.length} frames with AI.`,
+      };
+      applyEditedFrames(editedFrames, nextStatus);
+      const historyFrame = editedFrames[activeFrameIndex] ?? editedFrames[0];
+      saveGeneratedSpriteToHistory(historyFrame.sprite, `Edit all frames: ${requestEditInstruction}`);
+    } catch (error) {
+      setStatus({
+        type: "error",
+        message:
+          error instanceof Error
+            ? `AI edit failed: ${error.message}`
+            : "AI edit failed.",
+      });
+    } finally {
+      setIsGenerating(false);
+    }
   }
 
   async function handleGenerateAnimation() {
