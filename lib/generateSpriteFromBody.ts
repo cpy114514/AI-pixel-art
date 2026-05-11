@@ -418,9 +418,9 @@ export async function generateSpriteFromBody(body: GenerateSpriteRequest): Promi
 
   const providerApiUrl =
     body.provider === "clod-openai-best-local-key"
-      ? "https://api.clod.io/v1/chat/completions"
+      ? "https://api.clod.io/v1"
       : undefined;
-  const providerModel = body.provider === "clod-openai-best-local-key" ? "gpt-5.1" : undefined;
+  const providerModel = body.provider === "clod-openai-best-local-key" ? "GPT-5.2" : undefined;
   const apiUrl = providerApiUrl || body.apiUrl?.trim() || process.env.CUSTOM_AI_API_URL;
   const apiKey =
     body.provider === "clod-openai-best-local-key"
@@ -437,7 +437,7 @@ export async function generateSpriteFromBody(body: GenerateSpriteRequest): Promi
 
   if (body.provider === "clod-openai-best-local-key" && !apiKey) {
     return errorResponse(
-      "CLōD OpenAI Best Local Key is selected, but CLOD_LOCAL_API_KEY is missing from .env.local. Restart the dev server after adding it.",
+      "CLōD GPT-5.2 Local Key is selected, but CLOD_LOCAL_API_KEY is missing from .env.local. Restart the dev server after adding it.",
       500,
     );
   }

@@ -144,9 +144,9 @@ export async function POST(request: NextRequest) {
   const depth = Math.max(2, Math.min(16, Math.round(body.depth ?? 8)));
   const providerApiUrl =
     body.provider === "clod-openai-best-local-key"
-      ? "https://api.clod.io/v1/chat/completions"
+      ? "https://api.clod.io/v1"
       : undefined;
-  const providerModel = body.provider === "clod-openai-best-local-key" ? "gpt-5.1" : undefined;
+  const providerModel = body.provider === "clod-openai-best-local-key" ? "GPT-5.2" : undefined;
   const apiUrl = providerApiUrl || body.apiUrl?.trim() || process.env.CUSTOM_AI_API_URL;
   const apiKey =
     body.provider === "clod-openai-best-local-key"

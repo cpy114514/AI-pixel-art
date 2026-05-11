@@ -273,14 +273,14 @@ const providerPresets = [
   {
     id: "clod",
     name: "CLÅD",
-    apiUrl: "https://api.clod.io/v1/chat/completions",
-    model: "DeepSeek V3",
+    apiUrl: "https://api.clod.io/v1",
+    model: "GPT-5.2",
   },
   {
     id: "clod-openai-best-local-key",
-    name: "CLÅD OpenAI Best Local Key",
-    apiUrl: "https://api.clod.io/v1/chat/completions",
-    model: "gpt-5.1",
+    name: "CLÅD GPT-5.2 Local Key",
+    apiUrl: "https://api.clod.io/v1",
+    model: "GPT-5.2",
   },
   {
     id: "deepseek",
@@ -334,7 +334,7 @@ type LocalApiPreset = StoredApiSettings & {
   name: string;
 };
 
-const defaultClodModels = ["gpt-5.1", "DeepSeek V3", "Llama 3.1 8B"] as const;
+const defaultClodModels = ["GPT-5.2", "DeepSeek V3", "Llama 3.1 8B"] as const;
 
 type LocalState = {
   selectedProvider: ProviderPresetId;
@@ -468,8 +468,9 @@ function getClodModels(): string[] {
       return [...defaultClodModels];
     }
     const models = JSON.parse(stored);
+    const defaultModelSet = new Set<string>(defaultClodModels);
     return Array.isArray(models) && models.every((model) => typeof model === "string")
-      ? models
+      ? [...defaultClodModels, ...models.filter((model) => !defaultModelSet.has(model))]
       : [...defaultClodModels];
   } catch {
     window.localStorage.removeItem(CLOD_MODELS_STORAGE_KEY);
@@ -1277,6 +1278,8 @@ export default function Home() {
       message:
         providerId === "custom"
           ? "Custom API selected. Enter the API URL, model, and API key."
+          : providerId === "clod-openai-best-local-key"
+            ? `${preset.name} preset selected. It uses CLOD_LOCAL_API_KEY from .env.local.`
           : `${preset.name} preset selected. Paste your API key and generate.`,
     });
   }
