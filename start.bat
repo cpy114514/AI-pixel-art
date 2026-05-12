@@ -36,4 +36,6 @@ if not exist "node_modules" (
 echo Starting AI Pixel Art in your browser...
 
 call npm run browser
-pause
+if errorlevel 1 (
+  pause
+)

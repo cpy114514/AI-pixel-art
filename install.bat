@@ -63,7 +63,21 @@ if errorlevel 1 (
 )
 
 echo Creating desktop shortcut...
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$desktop = [Environment]::GetFolderPath('Desktop'); $shortcut = Join-Path $desktop 'AI Pixel Art.lnk'; $shell = New-Object -ComObject WScript.Shell; $link = $shell.CreateShortcut($shortcut); $link.TargetPath = Join-Path (Get-Location) 'start.bat'; $link.WorkingDirectory = (Get-Location).Path; $link.IconLocation = 'shell32.dll,220'; $link.Save()" >nul 2>nul
+set "shortcutScript=%TEMP%\ai_pixel_art_shortcut.vbs"
+(
+  echo Set shell = CreateObject^("WScript.Shell"^)
+  echo Set fso = CreateObject^("Scripting.FileSystemObject"^)
+  echo desktop = shell.SpecialFolders^("Desktop"^)
+  echo shortcut = fso.BuildPath^(desktop, "AI Pixel Art.lnk"^)
+  echo Set link = shell.CreateShortcut^(shortcut^)
+  echo link.TargetPath = "wscript.exe"
+  echo link.Arguments = Chr^(34^) ^& fso.BuildPath^("%CD%", "scripts\start-hidden.vbs"^) ^& Chr^(34^)
+  echo link.WorkingDirectory = "%CD%"
+  echo link.IconLocation = "shell32.dll,220"
+  echo link.Save
+) > "%shortcutScript%"
+cscript //nologo "%shortcutScript%" >nul 2>nul
+del "%shortcutScript%" >nul 2>nul
 
 echo.
 echo Setup complete.

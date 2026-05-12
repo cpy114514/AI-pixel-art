@@ -1,15 +1,14 @@
 import { spawn } from "node:child_process";
+import fs from "node:fs";
 import http from "node:http";
 import net from "node:net";
+import path from "node:path";
 
 const preferredPort = Number(process.env.AI_PIXEL_ART_PORT ?? 3000);
 const portSearchLimit = preferredPort + 19;
 const projectRoot = process.cwd();
+const devLogPath = path.join(projectRoot, "ai-pixel-art-dev.log");
 let serverProcess;
-let openedExistingDevServer = false;
-let existingNextDevServerDetected = false;
-let existingNextDevServerUrl = "";
-let devServerOutputBuffer = "";
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -134,18 +133,15 @@ async function isHomePageReady(port) {
   );
 }
 
+async function isAppReady(port) {
+  return (await isPixelArtReady(port)) && (await isHomePageReady(port));
+}
+
 async function waitForAppReady(port, maxAttempts = 180) {
   let stableReadyChecks = 0;
 
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-    if (existingNextDevServerDetected || openedExistingDevServer) {
-      return false;
-    }
-
-    const healthReady = await isPixelArtReady(port);
-    const homeReady = healthReady ? await isHomePageReady(port) : false;
-
-    if (healthReady && homeReady) {
+    if (await isAppReady(port)) {
       stableReadyChecks += 1;
       if (stableReadyChecks >= 2) {
         return true;
@@ -160,19 +156,62 @@ async function waitForAppReady(port, maxAttempts = 180) {
   return false;
 }
 
-async function findReadyPixelArtPort() {
-  for (let port = preferredPort; port <= portSearchLimit; port += 1) {
-    if (await isPixelArtReady(port)) {
-      return port;
-    }
-  }
-
-  return null;
-}
-
 async function getProjectNextProcessIds() {
   if (process.platform !== "win32") {
-    return [];
+    const result = await runCommand("ps", ["-axo", "pid=,command="]);
+    if (result.code !== 0) {
+      return [];
+    }
+
+    return result.stdout
+      .split(/\r?\n/)
+      .map((line) => {
+        const match = line.match(/^\s*(\d+)\s+(.+)$/);
+        return match ? { pid: Number(match[1]), commandLine: match[2] } : null;
+      })
+      .filter((entry) => entry !== null)
+      .filter(
+        ({ commandLine, pid }) =>
+          Number.isInteger(pid) &&
+          pid > 0 &&
+          pid !== process.pid &&
+          commandLine.includes(projectRoot) &&
+          /next(\\|\/)dist(\\|\/)bin|next(\\|\/)dist(\\|\/)server|postcss\.js/.test(
+            commandLine,
+          ),
+      )
+      .map(({ pid }) => pid);
+  }
+
+  const wmicResult = await runCommand("wmic.exe", [
+    "process",
+    "get",
+    "ProcessId,CommandLine",
+    "/FORMAT:CSV",
+  ]);
+
+  if (wmicResult.code === 0) {
+    return wmicResult.stdout
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line && !line.startsWith("Node,"))
+      .map((line) => {
+        const parts = line.split(",");
+        const pid = Number(parts.at(-1)?.trim());
+        const commandLine = parts.slice(1, -1).join(",");
+        return { commandLine, pid };
+      })
+      .filter(
+        ({ commandLine, pid }) =>
+          Number.isInteger(pid) &&
+          pid > 0 &&
+          pid !== process.pid &&
+          commandLine.includes(projectRoot) &&
+          /next(\\|\/)dist(\\|\/)bin|next(\\|\/)dist(\\|\/)server|postcss\.js/.test(
+            commandLine,
+          ),
+      )
+      .map(({ pid }) => pid);
   }
 
   const escapedRoot = escapePowerShellSingleQuotedString(projectRoot);
@@ -180,19 +219,27 @@ async function getProjectNextProcessIds() {
     "$root = '" + escapedRoot + "';",
     "Get-CimInstance Win32_Process",
     "|",
-    "Where-Object { $_.ProcessId -ne $PID -and $_.CommandLine -and $_.CommandLine.Contains($root) -and ($_.CommandLine -match 'next(\\\\|/)dist(\\\\|/)bin|next(\\\\|/)dist(\\\\|/)server|postcss\\.js') } |",
+    "Where-Object { $_.ProcessId -ne $PID -and $_.CommandLine -and $_.CommandLine.Contains($root) -and ($_.CommandLine -match 'next(\\\\|/)dist(\\\\|/)bin|next(\\\\|/)dist(\\\\|/)server|postcss\\.js') }",
+    "|",
     "Select-Object -ExpandProperty ProcessId",
   ].join(" ");
 
-  const result = await runCommand("powershell.exe", [
+  const powershellResult = await runCommand("powershell.exe", [
+    "-NoLogo",
     "-NoProfile",
     "-ExecutionPolicy",
     "Bypass",
+    "-WindowStyle",
+    "Hidden",
     "-Command",
     command,
   ]);
 
-  return result.stdout
+  if (powershellResult.code !== 0) {
+    return [];
+  }
+
+  return powershellResult.stdout
     .split(/\r?\n/)
     .map((line) => Number(line.trim()))
     .filter((pid) => Number.isInteger(pid) && pid > 0 && pid !== process.pid);
@@ -215,26 +262,20 @@ async function killProcessTree(pid) {
   } catch {}
 }
 
-async function cleanupStaleProjectServers() {
-  const readyPort = await findReadyPixelArtPort();
-  if (readyPort !== null) {
-    return readyPort;
-  }
-
+async function cleanupProjectServers() {
   const processIds = await getProjectNextProcessIds();
   if (processIds.length === 0) {
-    return null;
+    return;
   }
 
-  console.log("Cleaning up stale AI Pixel Art server processes...");
+  console.log("Closing previous AI Pixel Art server processes...");
   await Promise.all(processIds.map((pid) => killProcessTree(pid)));
   await sleep(1000);
-  return null;
 }
 
 async function choosePort() {
   for (let port = preferredPort; port <= portSearchLimit; port += 1) {
-    if (await isPixelArtReady(port)) {
+    if (await isAppReady(port)) {
       return { port, existing: true };
     }
     if (await canListenOnPort(port)) {
@@ -262,69 +303,29 @@ function openBrowser(url) {
   spawn(command, [url], { detached: true, stdio: "ignore" }).unref();
 }
 
-function maybeOpenExistingNextDevServer(allowFallback = false) {
-  if (!existingNextDevServerDetected || openedExistingDevServer) {
-    return;
-  }
-
-  if (!existingNextDevServerUrl && !allowFallback) {
-    return;
-  }
-
-  const url = existingNextDevServerUrl || `http://localhost:${preferredPort}`;
-  openedExistingDevServer = true;
-  console.log(`Opening existing Next dev server at ${url}`);
-  openBrowser(url);
-}
-
-function handleNextDevOutput(chunk, stream) {
-  const text = chunk.toString();
-  stream.write(chunk);
-  devServerOutputBuffer = `${devServerOutputBuffer}${text}`.slice(-5000);
-
-  if (devServerOutputBuffer.includes("Another next dev server is already running.")) {
-    existingNextDevServerDetected = true;
-    const lockMessageStart = devServerOutputBuffer.indexOf(
-      "Another next dev server is already running.",
-    );
-    const lockMessage = devServerOutputBuffer.slice(lockMessageStart);
-    const localUrls = [...lockMessage.matchAll(/http:\/\/(?:localhost|127\.0\.0\.1):\d+/g)];
-    if (localUrls.length > 0) {
-      existingNextDevServerUrl = localUrls[localUrls.length - 1][0];
-    }
-  }
-
-  maybeOpenExistingNextDevServer();
-}
-
 function startNextDev(port) {
   const isWindows = process.platform === "win32";
   const command = isWindows ? (process.env.ComSpec ?? "cmd.exe") : "npm";
   const args = isWindows
     ? ["/d", "/s", "/c", `npm run dev -- --hostname 127.0.0.1 --port ${port}`]
     : ["run", "dev", "--", "--hostname", "127.0.0.1", "--port", String(port)];
+  fs.appendFileSync(
+    devLogPath,
+    `\n\n[${new Date().toISOString()}] Starting AI Pixel Art at 127.0.0.1:${port}\n`,
+  );
+  const stdout = fs.openSync(devLogPath, "a");
+  const stderr = fs.openSync(devLogPath, "a");
 
   serverProcess = spawn(command, args, {
+    detached: true,
     env: { ...process.env, BROWSER: "none" },
-    stdio: ["ignore", "pipe", "pipe"],
+    stdio: ["ignore", stdout, stderr],
     windowsHide: true,
   });
 
-  serverProcess.stdout.on("data", (chunk) => {
-    handleNextDevOutput(chunk, process.stdout);
-  });
-
-  serverProcess.stderr.on("data", (chunk) => {
-    handleNextDevOutput(chunk, process.stderr);
-  });
-
-  serverProcess.on("exit", (code) => {
-    maybeOpenExistingNextDevServer(true);
-    if (openedExistingDevServer) {
-      process.exit(0);
-    }
-    process.exit(code ?? 0);
-  });
+  fs.closeSync(stdout);
+  fs.closeSync(stderr);
+  serverProcess.unref();
 }
 
 function stopServer() {
@@ -343,23 +344,15 @@ function stopServer() {
 }
 
 async function main() {
-  const existingReadyPort = await cleanupStaleProjectServers();
-  if (existingReadyPort !== null) {
-    const existingUrl = `http://127.0.0.1:${existingReadyPort}`;
-    console.log(`AI Pixel Art is already running at ${existingUrl}`);
-    await waitForAppReady(existingReadyPort, 30);
-    openBrowser(existingUrl);
-    return;
-  }
+  await cleanupProjectServers();
 
   const { port, existing } = await choosePort();
   const url = `http://127.0.0.1:${port}`;
 
   if (existing) {
-    console.log(`AI Pixel Art is already running at ${url}`);
-    await waitForAppReady(port, 30);
-    openBrowser(url);
-    return;
+    throw new Error(
+      `Could not restart AI Pixel Art cleanly because ${url} is still in use. Close old Node/Next processes and try again.`,
+    );
   }
 
   console.log(`Starting AI Pixel Art at ${url}`);
@@ -368,10 +361,6 @@ async function main() {
   if (await waitForAppReady(port)) {
     console.log(`Opening ${url}`);
     openBrowser(url);
-    return;
-  }
-
-  if (existingNextDevServerDetected || openedExistingDevServer) {
     return;
   }
 

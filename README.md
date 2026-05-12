@@ -6,20 +6,45 @@ You can draw by hand, generate sprites from text, edit an existing sprite with A
 
 ## Download
 
-Windows one-click package:
+Choose the package for your system:
 
-[Download AI_Pixel_Painter_one_click.zip](https://github.com/cpy114514/AI-pixel-art/raw/main/release/AI_Pixel_Painter_one_click.zip)
+- Windows: [AI_Pixel_Painter_windows.zip](https://github.com/cpy114514/AI-pixel-art/raw/main/release/AI_Pixel_Painter_windows.zip)
+- macOS / Linux: [AI_Pixel_Painter_macos_linux.tar.gz](https://github.com/cpy114514/AI-pixel-art/raw/main/release/AI_Pixel_Painter_macos_linux.tar.gz)
 
-Or use GitHub's green **Code** button and choose **Download ZIP**.
+The old Windows link still works:
+
+[AI_Pixel_Painter_one_click.zip](https://github.com/cpy114514/AI-pixel-art/raw/main/release/AI_Pixel_Painter_one_click.zip)
 
 ## How To Use
+
+### Windows
 
 1. Download the ZIP.
 2. Extract it.
 3. Double-click `install.bat`.
 4. The app will open in your browser.
 
-After installation, you can start it again from the desktop shortcut **AI Pixel Art**, or by double-clicking `start.bat`.
+After installation, you can start it again from the desktop shortcut **AI Pixel Art**. The shortcut opens the browser without keeping a terminal window on screen.
+
+If you need to see startup logs for debugging, double-click `start.bat`.
+
+### macOS / Linux
+
+1. Download the `.tar.gz`.
+2. Extract it.
+3. Open a terminal in the extracted folder.
+4. Run:
+
+```bash
+chmod +x install.sh start.sh
+./install.sh
+```
+
+After installation, start it again with:
+
+```bash
+./start.sh
+```
 
 The app runs as a local web app at the first available local port, usually:
 
@@ -31,11 +56,11 @@ http://127.0.0.1:3000
 
 This app needs Node.js.
 
-If Node.js is missing, `install.bat` will try to install it with Windows `winget`. If that does not work, install Node.js LTS from:
+If Node.js is missing on Windows, `install.bat` will try to install it with Windows `winget`. If that does not work, install Node.js LTS from:
 
 <https://nodejs.org/>
 
-Then run `install.bat` again.
+Then run `install.bat` or `install.sh` again.
 
 ## AI API Setup
 

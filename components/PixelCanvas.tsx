@@ -13,8 +13,7 @@ type PixelCanvasProps = {
 };
 
 const FALLBACK_CANVAS_SIZE = 640;
-const MIN_CELL_SIZE = 4;
-const MAX_BASE_CELL_SIZE = 56;
+const MIN_CELL_SIZE = 2;
 
 function drawTransparency(ctx: CanvasRenderingContext2D, x: number, y: number, size: number) {
   const half = size / 2;
@@ -62,18 +61,17 @@ export default function PixelCanvas({
     return () => observer.disconnect();
   }, []);
 
-  const baseCellSize = useMemo(
+  const cellSize = useMemo(
     () => {
       const usableWidth = Math.max(1, containerSize.width - 40);
       const usableHeight = Math.max(1, containerSize.height - 40);
       const fittedCellSize = Math.floor(
         Math.min(usableWidth / sprite.width, usableHeight / sprite.height),
       );
-      return Math.min(MAX_BASE_CELL_SIZE, Math.max(MIN_CELL_SIZE, fittedCellSize));
+      return Math.max(MIN_CELL_SIZE, fittedCellSize);
     },
     [containerSize.height, containerSize.width, sprite.height, sprite.width],
   );
-  const cellSize = baseCellSize;
 
   useLayoutEffect(() => {
     const canvas = canvasRef.current;
@@ -159,14 +157,18 @@ export default function PixelCanvas({
 
   return (
     <div
-      className="flex h-full min-h-[360px] flex-1 items-center justify-center overflow-auto rounded-lg border border-slate-200 bg-slate-100 p-5 shadow-inner"
+      className="flex h-full min-h-0 flex-1 items-start justify-center overflow-auto rounded-lg border border-slate-200 bg-slate-100 p-5 shadow-inner"
       ref={containerRef}
     >
-      <div className="relative inline-flex max-h-full max-w-full items-start justify-start">
+      <div className="relative inline-flex shrink-0 items-start justify-start">
         <canvas
           ref={canvasRef}
           aria-label={`${sprite.width} by ${sprite.height} pixel canvas`}
           className="cursor-crosshair touch-none rounded-[3px] bg-white shadow-panel"
+          style={{
+            height: sprite.height * cellSize,
+            width: sprite.width * cellSize,
+          }}
           onPointerDown={(event) => {
             event.currentTarget.setPointerCapture(event.pointerId);
             isPointerDownRef.current = true;

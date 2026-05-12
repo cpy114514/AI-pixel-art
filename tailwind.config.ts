@@ -3,6 +3,9 @@ import type { Config } from "tailwindcss";
 const config: Config = {
   content: [
     "./app/**/*.{js,ts,jsx,tsx,mdx}",
+    // API routes have no Tailwind classes; excluding avoids Turbopack/Tailwind stale
+    // dependency stat on removed files under app/api (e.g. after deleting a route).
+    "!./app/api/**",
     "./components/**/*.{js,ts,jsx,tsx,mdx}",
     "./lib/**/*.{js,ts,jsx,tsx,mdx}",
   ],

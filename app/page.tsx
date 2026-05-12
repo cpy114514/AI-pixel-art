@@ -11,17 +11,14 @@ import {
 import {
   ChevronDown,
   ChevronUp,
-  Box,
   Copy,
+  Eye,
+  EyeOff,
   Download,
-  Eraser,
   Film,
   ImageDown,
   KeyRound,
   Link2,
-  PaintBucket,
-  Paintbrush,
-  Pipette,
   Plus,
   ShieldCheck,
   Trash2,
@@ -30,8 +27,6 @@ import AIPanel, { type ReferenceImage, type SpriteHistoryItem } from "@/componen
 import { encodeSpritesAnimatedGif } from "@/lib/exportGif";
 import PixelCanvas from "@/components/PixelCanvas";
 import Toolbar, { type DrawTool } from "@/components/Toolbar";
-import VoxelCanvas from "@/components/VoxelCanvas";
-import VoxelLayerEditor from "@/components/VoxelLayerEditor";
 import {
   createBlankSprite,
   createVisibleSprite,
@@ -42,23 +37,9 @@ import {
   validatePixelSprite,
   type PixelSprite,
 } from "@/lib/pixelUtils";
-import {
-  cloneVoxelSprite,
-  countVisibleVoxels,
-  createBlankVoxelSprite,
-  fillVoxelLayer,
-  floodFillVoxelLayer,
-  repairVoxelSprite,
-  setVoxelColor,
-  type VoxelSprite,
-} from "@/lib/voxelUtils";
 
 type FetchSpriteAiResult =
   | { ok: true; sprite: PixelSprite; frames?: PixelSprite[]; warnings: string[] }
-  | { ok: false; message: string; details?: unknown };
-
-type FetchVoxelAiResult =
-  | { ok: true; voxel: VoxelSprite; warnings: string[] }
   | { ok: false; message: string; details?: unknown };
 
 function formatSpriteAiFailureDetails(result: {
@@ -182,55 +163,6 @@ async function fetchSpriteAiFromApi(
   };
 }
 
-async function fetchVoxelAiFromApi(
-  payload: Record<string, unknown>,
-): Promise<FetchVoxelAiResult> {
-  let response: Response;
-  try {
-    response = await fetch("/api/generate-voxel", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-  } catch (error) {
-    return {
-      ok: false,
-      message: error instanceof Error ? error.message : "Network request failed.",
-    };
-  }
-
-  const result = (await response.json()) as {
-    voxel?: unknown;
-    warnings?: string[];
-    error?: string;
-    details?: unknown;
-  };
-
-  if (!response.ok) {
-    const detailText = formatSpriteAiFailureDetails(result);
-    return {
-      ok: false,
-      message: `${result.error ?? `Request failed (${response.status}).`}${detailText}`,
-      details: result.details,
-    };
-  }
-
-  const validation = repairVoxelSprite(result.voxel);
-  if (!validation.ok) {
-    return {
-      ok: false,
-      message: validation.errors.join(" "),
-      details: validation.errors,
-    };
-  }
-
-  return {
-    ok: true,
-    voxel: validation.voxel,
-    warnings: [...validation.warnings, ...(result.warnings ?? [])],
-  };
-}
-
 const scaleOptions = [1, 4, 8, 16] as const;
 const API_SETTINGS_STORAGE_KEY = "ai-pixel-painter-api-settings";
 const API_PRESETS_STORAGE_KEY = "ai-pixel-painter-api-presets";
@@ -272,13 +204,13 @@ const providerPresets = [
   },
   {
     id: "clod",
-    name: "CLÅD",
+    name: "CL\u014dD",
     apiUrl: "https://api.clod.io/v1",
     model: "GPT-5.2",
   },
   {
     id: "clod-openai-best-local-key",
-    name: "CLÅD GPT-5.2 Local Key",
+    name: "CL\u014dD GPT-5.2 Local Key",
     apiUrl: "https://api.clod.io/v1",
     model: "GPT-5.2",
   },
@@ -321,6 +253,33 @@ const providerPresets = [
 ] as const;
 
 type ProviderPresetId = (typeof providerPresets)[number]["id"];
+
+function getUrlKeyMismatchHint(
+  provider: ProviderPresetId,
+  apiUrl: string,
+): string | null {
+  const trimmed = apiUrl.trim();
+  if (!trimmed) {
+    return null;
+  }
+  let host = "";
+  try {
+    host = new URL(trimmed).hostname.toLowerCase();
+  } catch {
+    return null;
+  }
+
+  if (provider === "deepseek" && host.includes("clod.io")) {
+    return "Preset is DeepSeek but the URL points to CLōD. The request goes to that URL — use that service’s API key.";
+  }
+  if (provider === "clod" && host.includes("deepseek")) {
+    return "Preset is CLōD but the URL points to DeepSeek. Align preset, URL, and key to the same provider.";
+  }
+  if (provider === "openai" && (host.includes("clod") || host.includes("deepseek"))) {
+    return "Preset is OpenAI but the URL does not look like OpenAI’s host. Check URL and key.";
+  }
+  return null;
+}
 
 type StoredApiSettings = {
   provider?: ProviderPresetId;
@@ -863,21 +822,12 @@ export default function Home() {
   const [selectedLocalPresetId, setSelectedLocalPresetId] = useState("");
   const [newClodModel, setNewClodModel] = useState("");
   const [isApiPanelOpen, setIsApiPanelOpen] = useState(true);
+  const [showApiKey, setShowApiKey] = useState(false);
   const [editInstruction, setEditInstruction] = useState("");
   const [animationFrameCount, setAnimationFrameCount] = useState("4");
   const [animationDescription, setAnimationDescription] = useState("");
   const [referenceImage, setReferenceImage] = useState<ReferenceImage | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [voxelPrompt, setVoxelPrompt] = useState("Draw an 8x8x8 treasure chest voxel model.");
-  const [voxelWidth, setVoxelWidth] = useState("8");
-  const [voxelHeight, setVoxelHeight] = useState("8");
-  const [voxelDepth, setVoxelDepth] = useState("8");
-  const [voxelSprite, setVoxelSprite] = useState<VoxelSprite>(() =>
-    createBlankVoxelSprite(8, 8, 8),
-  );
-  const [activeVoxelLayer, setActiveVoxelLayer] = useState(0);
-  const [voxelPaintTool, setVoxelPaintTool] = useState<DrawTool>("brush");
-  const [isGeneratingVoxel, setIsGeneratingVoxel] = useState(false);
   const [leftPanelWidth, setLeftPanelWidth] = useState(360);
   const [rightPanelWidth, setRightPanelWidth] = useState(320);
   const panelResizeDragRef = useRef<PanelResizeDrag | null>(null);
@@ -904,7 +854,11 @@ export default function Home() {
     clodModels,
     hasLoaded,
   } = localState;
-  const activeVoxelLayerIndex = Math.min(activeVoxelLayer, Math.max(0, voxelSprite.depth - 1));
+
+  const apiKeyMismatchHint = useMemo(
+    () => getUrlKeyMismatchHint(selectedProvider, apiUrl),
+    [apiUrl, selectedProvider],
+  );
 
   useEffect(() => {
     const loadLocalState = window.setTimeout(() => {
@@ -1063,78 +1017,6 @@ export default function Home() {
           ? `Erased pixel (${x}, ${y}).`
           : `Painted pixel (${x}, ${y}) with ${color}.`,
     });
-  }
-
-  function handleVoxelAction(x: number, y: number) {
-    const z = activeVoxelLayerIndex;
-    if (voxelPaintTool === "eyedropper") {
-      const color = voxelSprite.voxels[z][y][x];
-      setSelectedColor(color);
-      setVoxelPaintTool("brush");
-      setStatus({ type: "success", message: `Picked ${color} from voxel (${x}, ${y}, ${z}).` });
-      return;
-    }
-
-    if (voxelPaintTool === "fill") {
-      const next = floodFillVoxelLayer(voxelSprite, x, y, z, selectedColor);
-      if (JSON.stringify(next) !== JSON.stringify(voxelSprite)) {
-        setVoxelSprite(next);
-        setStatus({
-          type: "success",
-          message: `Filled voxel layer ${z + 1} with ${selectedColor}.`,
-        });
-      }
-      return;
-    }
-
-    const color = voxelPaintTool === "eraser" ? TRANSPARENT : selectedColor;
-    setVoxelSprite((current) => setVoxelColor(current, x, y, z, color));
-    setStatus({
-      type: "success",
-      message:
-        voxelPaintTool === "eraser"
-          ? `Erased voxel (${x}, ${y}, ${z}).`
-          : `Painted voxel (${x}, ${y}, ${z}) with ${color}.`,
-    });
-  }
-
-  function handleApplyVoxelSize() {
-    const width = parseVoxelSize(voxelWidth);
-    const height = parseVoxelSize(voxelHeight);
-    const depth = parseVoxelSize(voxelDepth);
-
-    if (!width || !height || !depth) {
-      setStatus({ type: "error", message: "Voxel size must be whole numbers from 2 to 16." });
-      return;
-    }
-
-    setVoxelSprite((current) => {
-      const next = createBlankVoxelSprite(width, height, depth);
-      const source = cloneVoxelSprite(current);
-      for (let z = 0; z < Math.min(source.depth, depth); z += 1) {
-        for (let y = 0; y < Math.min(source.height, height); y += 1) {
-          for (let x = 0; x < Math.min(source.width, width); x += 1) {
-            next.voxels[z][y][x] = source.voxels[z][y][x];
-          }
-        }
-      }
-      return next;
-    });
-    setActiveVoxelLayer((current) => Math.min(current, depth - 1));
-    setStatus({ type: "success", message: `Applied ${width}x${height}x${depth} voxel canvas.` });
-  }
-
-  function handleFillActiveVoxelLayer() {
-    setVoxelSprite((current) => fillVoxelLayer(current, activeVoxelLayerIndex, selectedColor));
-    setStatus({
-      type: "success",
-      message: `Filled voxel layer ${activeVoxelLayerIndex + 1} with ${selectedColor}.`,
-    });
-  }
-
-  function handleClearVoxelModel() {
-    setVoxelSprite(createBlankVoxelSprite(voxelSprite.width, voxelSprite.height, voxelSprite.depth));
-    setStatus({ type: "success", message: "Cleared the 3D voxel model." });
   }
 
   function handleUndo() {
@@ -1414,7 +1296,7 @@ export default function Home() {
   function handleAddClodModel() {
     const model = newClodModel.trim();
     if (!model) {
-      setStatus({ type: "error", message: "Enter a CLÅD model name first." });
+      setStatus({ type: "error", message: "Enter a CL\u014dD model name first." });
       return;
     }
 
@@ -1426,7 +1308,7 @@ export default function Home() {
       apiModel: model,
     }));
     setNewClodModel("");
-    setStatus({ type: "success", message: `Added CLÅD model "${model}".` });
+    setStatus({ type: "success", message: `Added CL\u014dD model "${model}".` });
   }
 
   async function handleReferenceImageFileChange(file: File | null) {
@@ -1726,72 +1608,6 @@ export default function Home() {
     }
   }
 
-  function parseVoxelSize(value: string) {
-    const size = Number(value.trim());
-    return Number.isInteger(size) && size >= 2 && size <= 16 ? size : null;
-  }
-
-  async function handleGenerateVoxel() {
-    const prompt = voxelPrompt.trim();
-    const width = parseVoxelSize(voxelWidth);
-    const height = parseVoxelSize(voxelHeight);
-    const depth = parseVoxelSize(voxelDepth);
-
-    if (!prompt) {
-      setStatus({ type: "error", message: "Enter a 3D voxel prompt first." });
-      return;
-    }
-    if (!width || !height || !depth) {
-      setStatus({ type: "error", message: "Voxel size must be whole numbers from 2 to 16." });
-      return;
-    }
-
-    setIsGeneratingVoxel(true);
-    setStatus({
-      type: "idle",
-      message: `Calling /api/generate-voxel for a ${width}x${height}x${depth} model...`,
-    });
-
-    try {
-      const outcome = await fetchVoxelAiFromApi({
-        prompt,
-        stylePreset,
-        width,
-        height,
-        depth,
-        provider: selectedProvider,
-        apiUrl,
-        apiKey,
-        model: apiModel,
-        accentColor: selectedColor === TRANSPARENT ? undefined : selectedColor,
-      });
-
-      if (!outcome.ok) {
-        setStatus({ type: "error", message: `3D voxel generation failed: ${outcome.message}` });
-        return;
-      }
-
-      setVoxelSprite(outcome.voxel);
-      setActiveVoxelLayer(0);
-      setStatus({
-        type: outcome.warnings.length > 0 ? "warning" : "success",
-        message:
-          outcome.warnings.join(" ") ||
-          `Generated ${countVisibleVoxels(outcome.voxel)} solid cubes.`,
-      });
-    } catch (error) {
-      setStatus({
-        type: "error",
-        message:
-          error instanceof Error
-            ? `3D voxel generation failed: ${error.message}`
-            : "3D voxel generation failed.",
-      });
-    } finally {
-      setIsGeneratingVoxel(false);
-    }
-  }
-
   async function handleExportPng() {
     try {
       await exportSpritePng(sprite, pngScale);
@@ -2030,7 +1846,7 @@ export default function Home() {
                 ))}
               </div>
             </div>
-            <div className="drag-resize min-h-[360px]">
+            <div className="drag-resize flex min-h-[360px] min-w-0 flex-1 lg:min-h-0">
               <PixelCanvas
                 sprite={sprite}
                 showGrid={showGrid}
@@ -2039,195 +1855,6 @@ export default function Home() {
                 onStrokeEnd={handleStrokeEnd}
               />
             </div>
-            <section className="drag-resize min-h-[420px] space-y-3 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <Box className="h-4 w-4 text-cyan-600" />
-                  <h2 className="text-sm font-bold text-slate-900">3D voxel generator</h2>
-                </div>
-                <span className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-bold text-slate-500">
-                  {countVisibleVoxels(voxelSprite)} cubes
-                </span>
-              </div>
-              <div className="grid gap-3 2xl:grid-cols-[minmax(0,1fr)_320px]">
-                <div className="space-y-3">
-                  <VoxelCanvas voxel={voxelSprite} />
-                  <div className="grid gap-3 2xl:grid-cols-[minmax(0,1fr)_220px]">
-                    <VoxelLayerEditor
-                      layerIndex={activeVoxelLayerIndex}
-                      onVoxelAction={handleVoxelAction}
-                      voxel={voxelSprite}
-                    />
-                    <div className="space-y-3 rounded-md border border-slate-200 bg-slate-50 p-3">
-                      <label className="block space-y-2">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="text-xs font-bold uppercase text-slate-500">
-                            Layer Z
-                          </span>
-                          <span className="text-xs font-bold text-slate-700">
-                            {activeVoxelLayerIndex + 1}/{voxelSprite.depth}
-                          </span>
-                        </div>
-                        <input
-                          className="w-full accent-cyan-600"
-                          max={Math.max(0, voxelSprite.depth - 1)}
-                          min={0}
-                          onChange={(event) => setActiveVoxelLayer(Number(event.target.value))}
-                          type="range"
-                          value={activeVoxelLayerIndex}
-                        />
-                      </label>
-                      <div className="grid grid-cols-4 gap-1">
-                        {[
-                          { id: "brush" as DrawTool, label: "Brush", icon: Paintbrush },
-                          { id: "eraser" as DrawTool, label: "Erase", icon: Eraser },
-                          { id: "fill" as DrawTool, label: "Fill", icon: PaintBucket },
-                          { id: "eyedropper" as DrawTool, label: "Pick", icon: Pipette },
-                        ].map((tool) => {
-                          const Icon = tool.icon;
-                          return (
-                            <button
-                              aria-label={`Voxel ${tool.label}`}
-                              className={`inline-flex h-9 items-center justify-center rounded-md border text-sm font-bold ${
-                                voxelPaintTool === tool.id
-                                  ? "border-cyan-500 bg-cyan-50 text-cyan-700"
-                                  : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
-                              }`}
-                              key={tool.id}
-                              onClick={() => setVoxelPaintTool(tool.id)}
-                              title={tool.label}
-                              type="button"
-                            >
-                              <Icon className="h-4 w-4" />
-                            </button>
-                          );
-                        })}
-                      </div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <input
-                          aria-label="3D voxel paint color"
-                          className="h-9 w-11 cursor-pointer rounded-md border border-slate-200 bg-white p-1"
-                          onChange={(event) => setSelectedColor(event.target.value)}
-                          type="color"
-                          value={selectedColor === TRANSPARENT ? "#000000" : selectedColor.slice(0, 7)}
-                        />
-                        {colorSwatches.map((color) => (
-                          <button
-                            aria-label={`Use ${color} for 3D voxels`}
-                            className={`h-8 w-8 rounded-md border ${
-                              selectedColor === color
-                                ? "border-cyan-600 ring-2 ring-cyan-100"
-                                : "border-slate-200"
-                            }`}
-                            key={color}
-                            onClick={() => setSelectedColor(color)}
-                            style={{ backgroundColor: color }}
-                            type="button"
-                          />
-                        ))}
-                        <button
-                          aria-label="Use transparent for 3D voxels"
-                          className={`inline-flex h-8 w-8 items-center justify-center rounded-md border bg-white text-slate-500 ${
-                            selectedColor === TRANSPARENT
-                              ? "border-cyan-600 ring-2 ring-cyan-100"
-                              : "border-slate-200"
-                          }`}
-                          onClick={() => setSelectedColor(TRANSPARENT)}
-                          type="button"
-                        >
-                          <Eraser className="h-4 w-4" />
-                        </button>
-                      </div>
-                      <div className="grid grid-cols-2 gap-2">
-                        <button
-                          className="h-9 rounded-md border border-slate-200 bg-white px-2 text-xs font-bold text-slate-600 hover:bg-slate-50"
-                          onClick={handleFillActiveVoxelLayer}
-                          type="button"
-                        >
-                          Fill layer
-                        </button>
-                        <button
-                          className="h-9 rounded-md border border-slate-200 bg-white px-2 text-xs font-bold text-slate-600 hover:bg-slate-50"
-                          onClick={handleClearVoxelModel}
-                          type="button"
-                        >
-                          Clear 3D
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <div className="space-y-3">
-                  <textarea
-                    className="min-h-24 w-full resize-none rounded-md border border-slate-200 bg-slate-50 p-3 text-sm leading-5 text-slate-800 outline-none transition focus:border-cyan-400 focus:bg-white focus:ring-2 focus:ring-cyan-100"
-                    onChange={(event) => setVoxelPrompt(event.target.value)}
-                    placeholder="Draw an 8x8x8 robot, house, potion bottle, sword, or creature."
-                    value={voxelPrompt}
-                  />
-                  <div className="grid grid-cols-3 gap-2">
-                    <label className="block space-y-1">
-                      <span className="text-xs font-bold uppercase text-slate-500">Width</span>
-                      <input
-                        className="h-9 w-full rounded-md border border-slate-200 px-2 text-sm font-bold text-slate-700 outline-none focus:border-cyan-400 focus:ring-2 focus:ring-cyan-100"
-                        max={16}
-                        min={2}
-                        onChange={(event) => setVoxelWidth(event.target.value)}
-                        type="number"
-                        value={voxelWidth}
-                      />
-                    </label>
-                    <label className="block space-y-1">
-                      <span className="text-xs font-bold uppercase text-slate-500">Height</span>
-                      <input
-                        className="h-9 w-full rounded-md border border-slate-200 px-2 text-sm font-bold text-slate-700 outline-none focus:border-cyan-400 focus:ring-2 focus:ring-cyan-100"
-                        max={16}
-                        min={2}
-                        onChange={(event) => setVoxelHeight(event.target.value)}
-                        type="number"
-                        value={voxelHeight}
-                      />
-                    </label>
-                    <label className="block space-y-1">
-                      <span className="text-xs font-bold uppercase text-slate-500">Depth</span>
-                      <input
-                        className="h-9 w-full rounded-md border border-slate-200 px-2 text-sm font-bold text-slate-700 outline-none focus:border-cyan-400 focus:ring-2 focus:ring-cyan-100"
-                        max={16}
-                        min={2}
-                        onChange={(event) => setVoxelDepth(event.target.value)}
-                        type="number"
-                        value={voxelDepth}
-                      />
-                    </label>
-                  </div>
-                  <button
-                    className="h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-sm font-bold text-slate-600 hover:bg-slate-50"
-                    onClick={handleApplyVoxelSize}
-                    type="button"
-                  >
-                    Apply 3D size
-                  </button>
-                  <button
-                    className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md bg-slate-900 px-3 text-sm font-bold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
-                    disabled={isGeneratingVoxel}
-                    onClick={handleGenerateVoxel}
-                    type="button"
-                  >
-                    <Box className="h-4 w-4" />
-                    {isGeneratingVoxel ? "Generating 3D..." : "Generate 3D voxels"}
-                  </button>
-                  <button
-                    className="h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-sm font-bold text-slate-600 hover:bg-slate-50"
-                    onClick={() => {
-                      navigator.clipboard.writeText(JSON.stringify(voxelSprite, null, 2));
-                      setStatus({ type: "success", message: "Copied 3D voxel JSON." });
-                    }}
-                    type="button"
-                  >
-                    Copy voxel JSON
-                  </button>
-                </div>
-              </div>
-            </section>
           </section>
 
           <button
@@ -2303,17 +1930,34 @@ export default function Home() {
                       value={apiUrl}
                     />
                   </label>
-                  <label className="block space-y-1">
+                  {apiKeyMismatchHint ? (
+                    <div className="rounded-md border border-amber-200 bg-amber-50 px-2 py-2 text-xs leading-4 text-amber-900">
+                      {apiKeyMismatchHint}
+                    </div>
+                  ) : null}
+                  <label className="block space-y-1" htmlFor="api-key-input">
                     <span className="text-xs font-bold uppercase text-slate-500">API Key</span>
-                    <input
-                      className="h-9 w-full rounded-md border border-slate-200 bg-white px-3 font-mono text-xs text-slate-800 outline-none focus:border-cyan-400 focus:ring-2 focus:ring-cyan-100"
-                      onChange={(event) =>
-                        setLocalState((current) => ({ ...current, apiKey: event.target.value }))
-                      }
-                      placeholder="Paste API key here"
-                      type="text"
-                      value={apiKey}
-                    />
+                    <div className="flex gap-2">
+                      <input
+                        autoComplete="off"
+                        className="h-9 min-w-0 flex-1 rounded-md border border-slate-200 bg-white px-3 font-mono text-xs text-slate-800 outline-none focus:border-cyan-400 focus:ring-2 focus:ring-cyan-100"
+                        id="api-key-input"
+                        onChange={(event) =>
+                          setLocalState((current) => ({ ...current, apiKey: event.target.value }))
+                        }
+                        placeholder="Paste API key here"
+                        type={showApiKey ? "text" : "password"}
+                        value={apiKey}
+                      />
+                      <button
+                        aria-label={showApiKey ? "Hide API key" : "Show API key"}
+                        className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                        onClick={() => setShowApiKey((current) => !current)}
+                        type="button"
+                      >
+                        {showApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
                   </label>
                   <label className="block space-y-1">
                     <span className="text-xs font-bold uppercase text-slate-500">Model</span>
@@ -2345,7 +1989,7 @@ export default function Home() {
                   </label>
                   {selectedProvider === "clod" ? (
                     <div className="space-y-2 rounded-md border border-slate-200 bg-slate-50 p-3">
-                      <div className="text-xs font-bold uppercase text-slate-500">CLÅD models</div>
+                      <div className="text-xs font-bold uppercase text-slate-500">{"CL\u014dD models"}</div>
                       <input
                         className="h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-xs text-slate-800 outline-none focus:border-cyan-400 focus:ring-2 focus:ring-cyan-100"
                         onChange={(event) => setNewClodModel(event.target.value)}
