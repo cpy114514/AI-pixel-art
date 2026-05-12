@@ -45,6 +45,36 @@ function requestJson(url) {
   });
 }
 
+function requestText(url) {
+  return new Promise((resolve) => {
+    const request = http.get(
+      url,
+      {
+        headers: {
+          "Cache-Control": "no-cache",
+        },
+      },
+      (response) => {
+        let body = "";
+        response.setEncoding("utf8");
+        response.on("data", (chunk) => {
+          body += chunk;
+        });
+        response.on("end", () => {
+          resolve({ statusCode: response.statusCode, text: body });
+        });
+      },
+    );
+
+    request.setTimeout(2500, () => {
+      request.destroy();
+      resolve(null);
+    });
+
+    request.on("error", () => resolve(null));
+  });
+}
+
 function runCommand(command, args, options = {}) {
   return new Promise((resolve) => {
     const child = spawn(command, args, {
@@ -92,6 +122,42 @@ async function isPixelArtReady(port) {
     result.json?.ok === true &&
     result.json?.name === "ai-pixel-art"
   );
+}
+
+async function isHomePageReady(port) {
+  const result = await requestText(`http://127.0.0.1:${port}/`);
+  return (
+    result?.statusCode === 200 &&
+    typeof result.text === "string" &&
+    result.text.includes("AI Pixel Art") &&
+    result.text.includes("/_next/")
+  );
+}
+
+async function waitForAppReady(port, maxAttempts = 180) {
+  let stableReadyChecks = 0;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    if (existingNextDevServerDetected || openedExistingDevServer) {
+      return false;
+    }
+
+    const healthReady = await isPixelArtReady(port);
+    const homeReady = healthReady ? await isHomePageReady(port) : false;
+
+    if (healthReady && homeReady) {
+      stableReadyChecks += 1;
+      if (stableReadyChecks >= 2) {
+        return true;
+      }
+    } else {
+      stableReadyChecks = 0;
+    }
+
+    await sleep(500);
+  }
+
+  return false;
 }
 
 async function findReadyPixelArtPort() {
@@ -281,6 +347,7 @@ async function main() {
   if (existingReadyPort !== null) {
     const existingUrl = `http://127.0.0.1:${existingReadyPort}`;
     console.log(`AI Pixel Art is already running at ${existingUrl}`);
+    await waitForAppReady(existingReadyPort, 30);
     openBrowser(existingUrl);
     return;
   }
@@ -290,6 +357,7 @@ async function main() {
 
   if (existing) {
     console.log(`AI Pixel Art is already running at ${url}`);
+    await waitForAppReady(port, 30);
     openBrowser(url);
     return;
   }
@@ -297,17 +365,14 @@ async function main() {
   console.log(`Starting AI Pixel Art at ${url}`);
   startNextDev(port);
 
-  for (let attempt = 0; attempt < 120; attempt += 1) {
-    if (await isPixelArtReady(port)) {
-      await sleep(1500);
-      if (existingNextDevServerDetected || openedExistingDevServer) {
-        return;
-      }
-      console.log(`Opening ${url}`);
-      openBrowser(url);
-      return;
-    }
-    await sleep(500);
+  if (await waitForAppReady(port)) {
+    console.log(`Opening ${url}`);
+    openBrowser(url);
+    return;
+  }
+
+  if (existingNextDevServerDetected || openedExistingDevServer) {
+    return;
   }
 
   throw new Error(`AI Pixel Art did not become ready at ${url}.`);
