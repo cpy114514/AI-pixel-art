@@ -40,7 +40,7 @@ import {
 
 type FetchSpriteAiResult =
   | { ok: true; sprite: PixelSprite; frames?: PixelSprite[]; warnings: string[] }
-  | { ok: false; message: string; details?: unknown };
+  | { ok: false; message: string; details?: unknown; aborted?: boolean };
 
 function formatSpriteAiFailureDetails(result: {
   error?: string;
@@ -83,6 +83,7 @@ function formatSpriteAiFailureDetails(result: {
 
 async function fetchSpriteAiFromApi(
   payload: Record<string, unknown>,
+  signal?: AbortSignal,
 ): Promise<FetchSpriteAiResult> {
   let response: Response;
   try {
@@ -90,8 +91,16 @@ async function fetchSpriteAiFromApi(
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
+      signal,
     });
   } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      return {
+        ok: false,
+        message: "AI generation paused.",
+        aborted: true,
+      };
+    }
     return {
       ok: false,
       message: error instanceof Error ? error.message : "Network request failed.",
@@ -808,6 +817,7 @@ export default function Home() {
   const [undoStack, setUndoStack] = useState<PixelSprite[]>([]);
   const [redoStack, setRedoStack] = useState<PixelSprite[]>([]);
   const strokeSnapshotRef = useRef<PixelSprite | null>(null);
+  const generationAbortRef = useRef<AbortController | null>(null);
   const [localState, setLocalState] = useState<LocalState>({
     selectedProvider: "custom",
     apiUrl: providerPresets[0].apiUrl,
@@ -1332,6 +1342,40 @@ export default function Home() {
     }
   }
 
+  function beginAiRun() {
+    generationAbortRef.current?.abort();
+    const controller = new AbortController();
+    generationAbortRef.current = controller;
+    setIsGenerating(true);
+    return controller;
+  }
+
+  function finishAiRun(controller: AbortController) {
+    if (generationAbortRef.current === controller) {
+      generationAbortRef.current = null;
+    }
+    setIsGenerating(false);
+  }
+
+  function handlePauseGeneration() {
+    generationAbortRef.current?.abort();
+    generationAbortRef.current = null;
+    setIsGenerating(false);
+    setStatus({ type: "warning", message: "Paused the current AI job." });
+  }
+
+  function handleAiRequestFailure(
+    outcome: Extract<FetchSpriteAiResult, { ok: false }>,
+    message: string,
+  ) {
+    if (outcome.aborted) {
+      setStatus({ type: "warning", message: "Paused the current AI job." });
+      return;
+    }
+
+    setStatus({ type: "error", message: `${message}: ${outcome.message}` });
+  }
+
   async function submitSpriteAiRequest({
     payload,
     idleMessage,
@@ -1347,13 +1391,13 @@ export default function Home() {
     errorPrefix: string;
     commitResult?: boolean;
   }) {
-    setIsGenerating(true);
+    const controller = beginAiRun();
     setStatus({ type: "idle", message: idleMessage });
 
     try {
-      const outcome = await fetchSpriteAiFromApi(payload);
+      const outcome = await fetchSpriteAiFromApi(payload, controller.signal);
       if (!outcome.ok) {
-        setStatus({ type: "error", message: `${errorPrefix}: ${outcome.message}` });
+        handleAiRequestFailure(outcome, errorPrefix);
         return;
       }
 
@@ -1376,7 +1420,7 @@ export default function Home() {
             : errorPrefix,
       });
     } finally {
-      setIsGenerating(false);
+      finishAiRun(controller);
     }
   }
 
@@ -1384,7 +1428,7 @@ export default function Home() {
     const requestPrompt =
       prompt.trim() || "Convert the reference photo into a polished pixel-art game sprite.";
 
-    setIsGenerating(true);
+    const controller = beginAiRun();
     setStatus({
       type: "idle",
       message: referenceImage
@@ -1393,21 +1437,24 @@ export default function Home() {
     });
 
     try {
-      const outcome = await fetchSpriteAiFromApi({
-        mode: "generate",
-        prompt: requestPrompt,
-        stylePreset,
-        width: sprite.width,
-        height: sprite.height,
-        provider: selectedProvider,
-        apiUrl,
-        apiKey,
-        model: apiModel,
-        referenceImageDataUrl: referenceImage?.dataUrl,
-      });
+      const outcome = await fetchSpriteAiFromApi(
+        {
+          mode: "generate",
+          prompt: requestPrompt,
+          stylePreset,
+          width: sprite.width,
+          height: sprite.height,
+          provider: selectedProvider,
+          apiUrl,
+          apiKey,
+          model: apiModel,
+          referenceImageDataUrl: referenceImage?.dataUrl,
+        },
+        controller.signal,
+      );
 
       if (!outcome.ok) {
-        setStatus({ type: "error", message: `AI generation failed: ${outcome.message}` });
+        handleAiRequestFailure(outcome, "AI generation failed");
         return;
       }
 
@@ -1428,7 +1475,7 @@ export default function Home() {
             : "AI generation failed.",
       });
     } finally {
-      setIsGenerating(false);
+      finishAiRun(controller);
     }
   }
 
@@ -1462,7 +1509,7 @@ export default function Home() {
       return;
     }
 
-    setIsGenerating(true);
+    const controller = beginAiRun();
     setStatus({
       type: "idle",
       message: `AI editing ${frames.length} frames...`,
@@ -1473,30 +1520,35 @@ export default function Home() {
       const warnings: string[] = [];
 
       for (let index = 0; index < frames.length; index += 1) {
+        if (controller.signal.aborted) {
+          setStatus({ type: "warning", message: "Paused the current AI job." });
+          return;
+        }
+
         const frame = frames[index];
         setStatus({
           type: "idle",
           message: `AI editing frame ${index + 1} of ${frames.length}...`,
         });
 
-        const outcome = await fetchSpriteAiFromApi({
-          mode: "edit",
-          editInstruction: requestEditInstruction,
-          stylePreset,
-          width: frame.sprite.width,
-          height: frame.sprite.height,
-          provider: selectedProvider,
-          apiUrl,
-          apiKey,
-          model: apiModel,
-          currentSprite: createVisibleSprite(frame.sprite),
-        });
+        const outcome = await fetchSpriteAiFromApi(
+          {
+            mode: "edit",
+            editInstruction: requestEditInstruction,
+            stylePreset,
+            width: frame.sprite.width,
+            height: frame.sprite.height,
+            provider: selectedProvider,
+            apiUrl,
+            apiKey,
+            model: apiModel,
+            currentSprite: createVisibleSprite(frame.sprite),
+          },
+          controller.signal,
+        );
 
         if (!outcome.ok) {
-          setStatus({
-            type: "error",
-            message: `AI edit failed on frame ${index + 1}: ${outcome.message}`,
-          });
+          handleAiRequestFailure(outcome, `AI edit failed on frame ${index + 1}`);
           return;
         }
 
@@ -1526,7 +1578,7 @@ export default function Home() {
             : "AI edit failed.",
       });
     } finally {
-      setIsGenerating(false);
+      finishAiRun(controller);
     }
   }
 
@@ -1550,32 +1602,32 @@ export default function Home() {
     const w = sprite.width;
     const h = sprite.height;
 
-    setIsGenerating(true);
+    const controller = beginAiRun();
     setStatus({
       type: "idle",
       message: `Animation: generating ${n} frames from current frame...`,
     });
 
     try {
-      const outcome = await fetchSpriteAiFromApi({
-        mode: "animate",
-        animationInstruction: desc,
-        frameCount: n,
-        stylePreset,
-        width: w,
-        height: h,
-        provider: selectedProvider,
-        apiUrl,
-        apiKey,
-        model: apiModel,
-        currentSprite: createVisibleSprite(sprite),
-      });
+      const outcome = await fetchSpriteAiFromApi(
+        {
+          mode: "animate",
+          animationInstruction: desc,
+          frameCount: n,
+          stylePreset,
+          width: w,
+          height: h,
+          provider: selectedProvider,
+          apiUrl,
+          apiKey,
+          model: apiModel,
+          currentSprite: createVisibleSprite(sprite),
+        },
+        controller.signal,
+      );
 
       if (!outcome.ok) {
-        setStatus({
-          type: "error",
-          message: `Animation failed: ${outcome.message}`,
-        });
+        handleAiRequestFailure(outcome, "Animation failed");
         return;
       }
 
@@ -1604,7 +1656,7 @@ export default function Home() {
         message: outcome.warnings.join(" ") || `Generated ${nextFrames.length}-frame animation.`,
       });
     } finally {
-      setIsGenerating(false);
+      finishAiRun(controller);
     }
   }
 
@@ -1752,6 +1804,7 @@ export default function Home() {
             canvasWidth={sprite.width}
             canvasHeight={sprite.height}
             isGenerating={isGenerating}
+            onPauseGeneration={handlePauseGeneration}
             onPromptChange={setPrompt}
             onEditInstructionChange={setEditInstruction}
             onAnimationFrameCountChange={setAnimationFrameCount}

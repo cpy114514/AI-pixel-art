@@ -85,6 +85,8 @@ echo You can now start AI Pixel Art with:
 echo - the desktop shortcut: AI Pixel Art
 echo - or this folder's start.bat
 echo.
+echo For troubleshooting logs, run start-debug.bat.
+echo.
 
 choice /C YN /M "Start AI Pixel Art now"
 if errorlevel 2 (
@@ -93,4 +95,4 @@ if errorlevel 2 (
   exit /b 0
 )
 
-call start.bat
+wscript.exe "%CD%\scripts\start-hidden.vbs"

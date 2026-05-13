@@ -70,6 +70,37 @@ function getPaletteGuidance(width: number, height: number) {
   return "Palette target: transparent plus 10-18 visible #RRGGBB colors. Build distinct ramps for major materials, reuse colors consistently, and avoid one-color or random-color output.";
 }
 
+function getQualityFloor(width: number, height: number) {
+  const pixels = width * height;
+  const longestSide = Math.max(width, height);
+  const minimumVisibleColors = longestSide >= 32 ? 8 : longestSide >= 16 ? 6 : 4;
+  const minimumVisiblePixels =
+    longestSide <= 8
+      ? Math.max(8, Math.round(pixels * 0.22))
+      : longestSide <= 16
+        ? Math.max(30, Math.round(pixels * 0.18))
+        : longestSide <= 32
+          ? Math.max(110, Math.round(pixels * 0.12))
+          : Math.max(260, Math.round(pixels * 0.08));
+  const maximumVisiblePixels = Math.round(pixels * 0.82);
+
+  return {
+    maximumVisiblePixels,
+    minimumVisibleColors,
+    minimumVisiblePixels,
+  };
+}
+
+function getDetailBudgetGuidance(width: number, height: number) {
+  const floor = getQualityFloor(width, height);
+  return [
+    `Quality floor: use at least ${floor.minimumVisibleColors} visible colors unless the request explicitly requires monochrome.`,
+    `Quality floor: use roughly ${floor.minimumVisiblePixels}-${floor.maximumVisiblePixels} visible non-transparent pixels for the subject; do not return a tiny sparse icon or a filled square background.`,
+    "Detail budget: include an outer silhouette, shadow side, highlight side, and at least one internal feature cluster that identifies the subject.",
+    "Recognition target: a person should understand what the sprite is in under one second at 1x zoom.",
+  ].join(" ");
+}
+
 function getCanvasQualityGuidance(width: number, height: number) {
   const longestSide = Math.max(width, height);
 
@@ -115,12 +146,16 @@ function getPixelArtQualityRules(width: number, height: number, hasReferenceImag
   return [
     getCanvasQualityGuidance(width, height),
     getPaletteGuidance(width, height),
+    getDetailBudgetGuidance(width, height),
     "Composition: one centered isolated game asset on transparent background unless the request explicitly asks for a background.",
+    "Recognition is the top priority: exaggerate the object's iconic shape, face, pose, weapon, ears, wings, slime outline, or item silhouette so it is obvious at first glance.",
     "Silhouette: readable at 1x with a clear outer contour; use a 1px dark outline or strong edge contrast where useful.",
     "Lighting: consistent top-left light; place shadows on lower-right areas and highlights on upper-left planes.",
     "Pixel technique: use intentional clusters, clean ramps, selective single-pixel highlights, and small hue shifts between light and shadow.",
     "Avoid: flat single-color fills, simple geometric placeholders, blurry gradients, pillow shading, random noise, banding, text labels, UI elements, watermark-like marks.",
     "Anti-upscale rule: each requested pixel is real detail. Never make a smaller sprite and scale it by repeating blocks.",
+    "Before output, self-check: if the sprite looks like a blob, flat silhouette, single-color stamp, or sparse doodle, revise the JSON before answering.",
+    "Before output, self-check: if a player could not name the subject immediately, simplify and exaggerate the most recognizable features before answering.",
     hasReferenceImage
       ? "Reference rule: preserve the main subject, pose, proportions, key colors, and iconic details; simplify into pixel clusters instead of tracing noise."
       : "",
@@ -214,6 +249,51 @@ function countVisibleColors(sprite: { pixels: string[][] }) {
 
 function countVisiblePixels(sprite: { pixels: string[][] }) {
   return sprite.pixels.flat().filter((color) => color !== "transparent").length;
+}
+
+function assessSpriteQuality(sprite: PixelSprite) {
+  const visibleColors = countVisibleColors(sprite);
+  const visiblePixels = countVisiblePixels(sprite);
+  const floor = getQualityFloor(sprite.width, sprite.height);
+  const issues: string[] = [];
+
+  if (visibleColors < floor.minimumVisibleColors) {
+    issues.push(
+      `only ${visibleColors} visible colors; target at least ${floor.minimumVisibleColors}`,
+    );
+  }
+
+  if (visiblePixels < floor.minimumVisiblePixels) {
+    issues.push(
+      `only ${visiblePixels} visible pixels; target at least ${floor.minimumVisiblePixels}`,
+    );
+  }
+
+  if (visiblePixels > floor.maximumVisiblePixels) {
+    issues.push(
+      `${visiblePixels} visible pixels fills too much of the canvas; keep the background transparent and shape isolated`,
+    );
+  }
+
+  return {
+    issues,
+    visibleColors,
+    visiblePixels,
+  };
+}
+
+function buildQualityRetryPrompt(prompt: string, sprite: PixelSprite, issues: string[]) {
+  return [
+    prompt,
+    "",
+    "QUALITY REVISION REQUIRED:",
+    `The previous sprite failed quality checks: ${issues.join("; ")}.`,
+    `Previous sprite JSON to improve: ${JSON.stringify(sprite)}`,
+    "Generate a stronger final version at the same exact size.",
+    "Keep the requested subject, but improve one-glance recognizability, silhouette readability, outline, material color ramps, top-left highlights, lower-right shadows, and recognizable internal details.",
+    "Exaggerate the subject's iconic features so a player can name it in under one second.",
+    "Do not return the same simple sprite again. Do not upscale a smaller sprite. Output only the complete corrected JSON.",
+  ].join("\n");
 }
 
 function buildUpstreamBody(
@@ -434,6 +514,7 @@ export async function generateSpriteFromBody(body: GenerateSpriteRequest): Promi
       500,
     );
   }
+  const configuredApiUrl = apiUrl;
 
   if (body.provider === "clod-openai-best-local-key" && !apiKey) {
     return errorResponse(
@@ -444,22 +525,23 @@ export async function generateSpriteFromBody(body: GenerateSpriteRequest): Promi
 
   let parsedApiUrl: URL;
   try {
-    parsedApiUrl = new URL(apiUrl);
+    parsedApiUrl = new URL(configuredApiUrl);
   } catch {
     return errorResponse(
       "API URL is invalid. Include the full URL, for example https://example.com/generate-sprite.",
       400,
-      { apiUrl },
+      { apiUrl: configuredApiUrl },
     );
   }
 
   if (!["http:", "https:"].includes(parsedApiUrl.protocol)) {
-    return errorResponse("API URL must start with http:// or https://.", 400, { apiUrl });
+    return errorResponse("API URL must start with http:// or https://.", 400, {
+      apiUrl: configuredApiUrl,
+    });
   }
 
   parsedApiUrl = normalizeApiUrl(parsedApiUrl);
 
-  let upstreamResponse: Response;
   const requestedWidth = body.width ?? 16;
   const requestedHeight = body.height ?? 16;
   const requestedFrameCount = Math.max(2, Math.min(12, Math.round(body.frameCount ?? 4)));
@@ -489,61 +571,78 @@ export async function generateSpriteFromBody(body: GenerateSpriteRequest): Promi
     currentSprite = currentValidation.sprite;
   }
 
-  try {
-    upstreamResponse = await fetch(parsedApiUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
-      },
-      body: JSON.stringify(
-        buildUpstreamBody(
-          parsedApiUrl,
-          model,
-          prompt,
-          stylePreset,
-          requestedWidth,
-          requestedHeight,
-          requestedWidth,
-          requestedHeight,
-          referenceImage.dataUrl,
-          currentSprite,
-          mode === "edit" ? editInstruction : undefined,
-          mode === "animate" ? animationInstruction : undefined,
-          mode === "animate" ? requestedFrameCount : undefined,
+  async function fetchUpstreamJson(requestPrompt: string) {
+    let upstreamResponse: Response;
+    try {
+      upstreamResponse = await fetch(parsedApiUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
+        },
+        body: JSON.stringify(
+          buildUpstreamBody(
+            parsedApiUrl,
+            model,
+            requestPrompt,
+            stylePreset,
+            requestedWidth,
+            requestedHeight,
+            requestedWidth,
+            requestedHeight,
+            referenceImage.dataUrl,
+            currentSprite,
+            mode === "edit" ? editInstruction : undefined,
+            mode === "animate" ? animationInstruction : undefined,
+            mode === "animate" ? requestedFrameCount : undefined,
+          ),
         ),
-      ),
-    });
-  } catch (error) {
-    return errorResponse(
-      error instanceof Error
-        ? `Could not reach custom AI API: ${error.message}.`
-        : "Could not reach custom AI API.",
-      502,
-      getFetchErrorDetails(error, apiUrl),
-    );
+      });
+    } catch (error) {
+      return {
+        ok: false as const,
+        response: errorResponse(
+          error instanceof Error
+            ? `Could not reach custom AI API: ${error.message}.`
+            : "Could not reach custom AI API.",
+          502,
+          getFetchErrorDetails(error, configuredApiUrl),
+        ),
+      };
+    }
+
+    const responseText = await upstreamResponse.text();
+
+    if (!upstreamResponse.ok) {
+      return {
+        ok: false as const,
+        response: errorResponse(
+          `Custom AI API returned ${upstreamResponse.status}.`,
+          502,
+          responseText.slice(0, 1200),
+        ),
+      };
+    }
+
+    try {
+      return { ok: true as const, responseJson: JSON.parse(responseText) as unknown };
+    } catch {
+      return {
+        ok: false as const,
+        response: errorResponse(
+          "Custom AI API returned invalid JSON. It must return a sprite object with width, height, and pixels.",
+          502,
+          responseText.slice(0, 1200),
+        ),
+      };
+    }
   }
 
-  const responseText = await upstreamResponse.text();
-
-  if (!upstreamResponse.ok) {
-    return errorResponse(
-      `Custom AI API returned ${upstreamResponse.status}.`,
-      502,
-      responseText.slice(0, 1200),
-    );
+  const upstreamResult = await fetchUpstreamJson(prompt);
+  if (!upstreamResult.ok) {
+    return upstreamResult.response;
   }
-
-  let responseJson: unknown;
-  try {
-    responseJson = JSON.parse(responseText);
-  } catch {
-    return errorResponse(
-      "Custom AI API returned invalid JSON. It must return a sprite object with width, height, and pixels.",
-      502,
-      responseText.slice(0, 1200),
-    );
-  }
+  const responseJson = upstreamResult.responseJson;
 
   if (mode === "animate") {
     if (!currentSprite) {
@@ -632,18 +731,42 @@ export async function generateSpriteFromBody(body: GenerateSpriteRequest): Promi
     });
   }
 
-  const finalSprite = validation.sprite;
+  let finalSprite = validation.sprite;
   const warnings = [...validation.warnings];
+
+  const firstQuality = assessSpriteQuality(finalSprite);
+
+  if (mode === "generate" && firstQuality.issues.length > 0) {
+    const retryPrompt = buildQualityRetryPrompt(prompt, finalSprite, firstQuality.issues);
+    const retryResult = await fetchUpstreamJson(retryPrompt);
+    if (retryResult.ok) {
+      const retryPayload = extractSpritePayload(retryResult.responseJson);
+      const retryValidation = repairPixelSprite(retryPayload);
+      if (
+        retryValidation.ok &&
+        retryValidation.sprite.width === requestedWidth &&
+        retryValidation.sprite.height === requestedHeight
+      ) {
+        const retryQuality = assessSpriteQuality(retryValidation.sprite);
+        if (retryQuality.issues.length < firstQuality.issues.length) {
+          finalSprite = retryValidation.sprite;
+          warnings.push(
+            "First AI output was too simple, so the server automatically requested a quality revision.",
+          );
+          warnings.push(...retryValidation.warnings);
+        }
+      }
+    }
+  }
+
+  const finalQuality = assessSpriteQuality(finalSprite);
   warnings.push(
-    `AI output displayed with ${countVisiblePixels(finalSprite)} visible pixels and ${countVisibleColors(finalSprite)} visible colors.`,
+    `AI output displayed with ${finalQuality.visiblePixels} visible pixels and ${finalQuality.visibleColors} visible colors.`,
   );
 
-  const minimumVisibleColors = finalSprite.width >= 32 || finalSprite.height >= 32 ? 8 : 5;
-  const visibleColorCount = countVisibleColors(finalSprite);
-
-  if (visibleColorCount < minimumVisibleColors) {
+  if (finalQuality.issues.length > 0) {
     warnings.push(
-      `Only ${visibleColorCount} visible colors were generated; expected at least ${minimumVisibleColors}. Showing the partial/simple result anyway.`,
+      `Quality warning: ${finalQuality.issues.join("; ")}. Try a more specific prompt or a larger canvas if the result still looks too simple.`,
     );
   }
 

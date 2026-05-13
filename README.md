@@ -15,22 +15,23 @@ The old Windows link still works:
 
 [AI_Pixel_Painter_one_click.zip](https://github.com/cpy114514/AI-pixel-art/raw/main/release/AI_Pixel_Painter_one_click.zip)
 
-## How To Use
+## Quick Start
 
 ### Windows
 
-1. Download the ZIP.
-2. Extract it.
-3. Double-click `install.bat`.
-4. The app will open in your browser.
+1. Download `AI_Pixel_Painter_windows.zip`.
+2. Right-click the ZIP and choose **Extract All**.
+3. Open the extracted `AI_Pixel_Painter` folder.
+4. Double-click `install.bat`.
+5. Wait for dependencies to install. The app will open in your browser.
 
 After installation, you can start it again from the desktop shortcut **AI Pixel Art**. The shortcut opens the browser without keeping a terminal window on screen.
 
-If you need to see startup logs for debugging, double-click `start.bat`.
+`start.bat` uses the hidden launcher. If you need to see startup logs for debugging, double-click `start-debug.bat`.
 
 ### macOS / Linux
 
-1. Download the `.tar.gz`.
+1. Download `AI_Pixel_Painter_macos_linux.tar.gz`.
 2. Extract it.
 3. Open a terminal in the extracted folder.
 4. Run:
@@ -40,7 +41,7 @@ chmod +x install.sh start.sh
 ./install.sh
 ```
 
-After installation, start it again with:
+After installation, start it again from the same folder with:
 
 ```bash
 ./start.sh
@@ -52,6 +53,8 @@ The app runs as a local web app at the first available local port, usually:
 http://127.0.0.1:3000
 ```
 
+If the browser does not open automatically, open that address manually.
+
 ## Need Node.js?
 
 This app needs Node.js.
@@ -62,18 +65,83 @@ If Node.js is missing on Windows, `install.bat` will try to install it with Wind
 
 Then run `install.bat` or `install.sh` again.
 
-## AI API Setup
+## Using The App
 
-Open the app and choose an API provider preset.
+### 1. Connect An AI API
 
-Usually you only need to fill:
+Open the right-side **API connection** panel.
+
+1. Choose a provider preset, or choose `custom`.
+2. Fill the API URL if needed.
+3. Fill your API key.
+4. Choose or type a model name.
+
+Usually you only need:
 
 - API key
 - model name, if your provider requires it
 
 Your settings are saved locally in the app, so you do not need to type them again every time.
 
-The download ZIP does not include any API key. API keys stay on your own computer.
+The download files do not include any API key. API keys stay on your own computer.
+
+### 2. Create A Sprite
+
+1. Choose the canvas size on the left, for example `16x16` or `32x32`.
+2. Type a prompt like:
+
+```text
+Draw a 16x16 blue slime with a readable face, dark outline, highlight, and shadow.
+```
+
+3. Click **Generate with AI**.
+4. If it is taking too long, click **Pause current AI job**.
+
+The app tells the AI the current canvas size automatically.
+
+### 3. Edit A Sprite With AI
+
+1. Change **Function** to **Edit current frame**.
+2. Type an edit instruction, for example:
+
+```text
+Make the ears smaller and keep the rest unchanged.
+```
+
+3. Click **Edit with AI**.
+
+If your image has multiple animation frames, the edit is applied to all frames.
+
+### 4. Turn A Photo Into Pixel Art
+
+1. Use **Upload photo** in the AI panel.
+2. Type what should be preserved from the photo.
+3. Click **Generate from photo**.
+
+### 5. Make Animation
+
+1. Create or load one sprite frame.
+2. Change **Function** to **Animate current frame**.
+3. Set the number of frames.
+4. Describe the motion, for example:
+
+```text
+Idle breathing animation with a small bounce and blinking eyes.
+```
+
+5. Click **Generate animation**.
+
+### 6. Export
+
+Use the right-side export panel to save:
+
+- current frame PNG
+- sprite sheet PNG
+- animated GIF
+
+You can choose PNG scale: `1x`, `4x`, `8x`, or `16x`.
+
+## Advanced API Setup
 
 For advanced users, you can also copy `.env.example` to `.env.local` and edit:
 

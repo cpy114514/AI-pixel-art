@@ -1,6 +1,6 @@
 "use client";
 
-import { Bot, Film, History, ImagePlus, Pencil, Ruler, Sparkles, Trash2, X } from "lucide-react";
+import { Bot, Film, History, ImagePlus, Pause, Pencil, Ruler, Sparkles, Trash2, X } from "lucide-react";
 import { ALLOWED_SIZES, TRANSPARENT, type PixelSprite } from "@/lib/pixelUtils";
 import { useLayoutEffect, useRef, useState } from "react";
 import NextImage from "next/image";
@@ -33,6 +33,7 @@ type AIPanelProps = {
   canvasWidth: number;
   canvasHeight: number;
   isGenerating: boolean;
+  onPauseGeneration: () => void;
   onPromptChange: (prompt: string) => void;
   onEditInstructionChange: (editInstruction: string) => void;
   onAnimationFrameCountChange: (value: string) => void;
@@ -109,6 +110,7 @@ export default function AIPanel({
   canvasWidth,
   canvasHeight,
   isGenerating,
+  onPauseGeneration,
   onPromptChange,
   onEditInstructionChange,
   onAnimationFrameCountChange,
@@ -186,6 +188,16 @@ export default function AIPanel({
         <div className="rounded-md border border-cyan-100 bg-cyan-50 px-3 py-2 text-xs font-medium text-cyan-800">
           AI target canvas: {canvasWidth}x{canvasHeight}
         </div>
+        {isGenerating ? (
+          <button
+            className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 text-sm font-bold text-amber-800 transition hover:bg-amber-100"
+            onClick={onPauseGeneration}
+            type="button"
+          >
+            <Pause className="h-4 w-4" />
+            Pause current AI job
+          </button>
+        ) : null}
 
         {aiToolMode === "generate" ? (
           <div className="space-y-3 border-t border-slate-100 pt-3">
