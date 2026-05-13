@@ -63,6 +63,29 @@ If Node.js is missing on Windows, `install.bat` will try to install it with Wind
 
 Then run `install.bat` or `install.sh` again.
 
+## AI Use
+
+AI Pixel Art uses AI to turn user instructions into exact pixel-color JSON data.
+
+The AI can:
+
+- generate a new sprite from a text prompt
+- convert an uploaded photo into pixel art
+- edit an existing sprite from an instruction
+- generate animation frames from one existing frame
+
+The app does not draw images directly with an image generator. Instead, it asks the AI to return structured pixel data:
+
+```json
+{
+  "width": 16,
+  "height": 16,
+  "pixels": [["#000000", "transparent"]]
+}
+```
+
+That JSON is validated, repaired when possible, and rendered onto the canvas. API providers are configurable, and API keys are stored locally on the user's machine. The release downloads do not include any API key.
+
 ## Using The App
 
 ### 1. Connect An AI API
