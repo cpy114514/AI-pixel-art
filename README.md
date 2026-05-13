@@ -2,7 +2,7 @@
 
 A simple pixel-art tool for making game sprites with AI.
 
-You can draw by hand, generate sprites from text, edit an existing sprite with AI, turn a photo into pixel art, and export PNG or GIF animations.
+You can draw by hand, generate sprites from text, edit an existing sprite with AI, turn a photo into pixel art, and export PNG or make multiple frames animations.
 
 ## Download
 
@@ -12,8 +12,6 @@ Choose the package for your system:
 - macOS / Linux: [AI_Pixel_Painter_macos_linux.tar.gz](https://github.com/cpy114514/AI-pixel-art/raw/main/release/AI_Pixel_Painter_macos_linux.tar.gz)
 
 The old Windows link still works:
-
-[AI_Pixel_Painter_one_click.zip](https://github.com/cpy114514/AI-pixel-art/raw/main/release/AI_Pixel_Painter_one_click.zip)
 
 ## Quick Start
 
@@ -140,94 +138,6 @@ Use the right-side export panel to save:
 - animated GIF
 
 You can choose PNG scale: `1x`, `4x`, `8x`, or `16x`.
-
-## Advanced API Setup
-
-For advanced users, you can also copy `.env.example` to `.env.local` and edit:
-
-```text
-CUSTOM_AI_API_URL=
-CUSTOM_AI_API_KEY=
-CUSTOM_AI_MODEL=
-```
-
-Do not upload `.env.local`. It is ignored by Git.
-
-## Developer Commands
-
-```bash
-npm install
-npm run dev
-```
-
-## AI Agent Tool
-
-AI agents can use this app through MCP or local REST APIs.
-
-Start the web app first:
-
-```bash
-npm run dev
-```
-
-Then start the MCP tool server:
-
-```bash
-npm run mcp:agent
-```
-
-Example MCP config:
-
-```json
-{
-  "mcpServers": {
-    "ai-pixel-painter": {
-      "command": "npm",
-      "args": ["run", "mcp:agent"],
-      "cwd": "PATH_TO_AI_Pixel_Painter",
-      "env": {
-        "AI_PIXEL_PAINTER_BASE_URL": "http://127.0.0.1:3000"
-      }
-    }
-  }
-}
-```
-
-The MCP server gives agents tools to:
-
-- generate a sprite
-- edit a sprite
-- generate animation frames
-- validate sprite JSON
-- export PNG
-- export sprite sheet PNG
-- export animated GIF
-
-REST manifest:
-
-```text
-GET http://127.0.0.1:3000/api/agent/manifest
-```
-
-Optional local auth:
-
-```text
-AGENT_API_SECRET=your-local-secret
-```
-
-When set, agent REST routes require:
-
-```text
-Authorization: Bearer your-local-secret
-```
-
-See `mcp-config.example.json` for a copyable MCP setup.
-
-Build:
-
-```bash
-npm run build
-```
 
 ## License
 
