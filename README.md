@@ -6,12 +6,16 @@ You can draw by hand, generate sprites from text, edit an existing sprite with A
 
 ## Download
 
+Latest release:
+
+<https://github.com/cpy114514/AI-pixel-art/releases/tag/v1.0.0>
+
 Choose the package for your system:
 
-- Windows: [AI_Pixel_Painter_windows.zip](https://github.com/cpy114514/AI-pixel-art/raw/main/release/AI_Pixel_Painter_windows.zip)
-- macOS / Linux: [AI_Pixel_Painter_macos_linux.tar.gz](https://github.com/cpy114514/AI-pixel-art/raw/main/release/AI_Pixel_Painter_macos_linux.tar.gz)
+- Windows: [AI_Pixel_Painter_windows.zip](https://github.com/cpy114514/AI-pixel-art/releases/download/v1.0.0/AI_Pixel_Painter_windows.zip)
+- macOS / Linux: [AI_Pixel_Painter_macos_linux.tar.gz](https://github.com/cpy114514/AI-pixel-art/releases/download/v1.0.0/AI_Pixel_Painter_macos_linux.tar.gz)
 
-The old Windows link still works:
+The release also includes `AI_Pixel_Painter_one_click.zip`.
 
 ## Quick Start
 
