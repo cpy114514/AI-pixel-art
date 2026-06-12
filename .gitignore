@@ -4,6 +4,9 @@ out
 dist
 coverage
 output
+launcher/**/bin/
+launcher/**/obj/
+launcher/**/publish/
 .env
 .env*.local
 .env.local
@@ -12,6 +15,9 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 ai-pixel-art*.log
+AI Pixel Art.exe
+*.pdb
 *.zip
 !release/
 !release/*.zip
+!release/AI Pixel Art.exe
