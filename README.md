@@ -6,7 +6,7 @@ You can generate pixel art image, edit the image and also make animation with AI
 
 ## Latest release:
 
-<https://github.com/cpy114514/AI-pixel-art/releases/tag/v1.0.1>
+<https://github.com/cpy114514/AI-pixel-art/releases/tag/v1.0.2>
 
 ## Set up on your PC
 
