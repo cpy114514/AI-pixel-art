@@ -1,11 +1,69 @@
-const { app, BrowserWindow, dialog } = require("electron");
+const { app, BrowserWindow } = require("electron");
 const { spawn } = require("node:child_process");
+const fs = require("node:fs");
 const http = require("node:http");
 const net = require("node:net");
 const path = require("node:path");
 
 let serverProcess = null;
 let mainWindow = null;
+let logPath = null;
+
+function log(message) {
+  if (!logPath) {
+    return;
+  }
+
+  try {
+    fs.appendFileSync(logPath, `[${new Date().toISOString()}] ${message}\n`);
+  } catch {
+    // Logging must never prevent the app from starting.
+  }
+}
+
+function loadingHtml(message) {
+  return `<!doctype html>
+    <html>
+      <head>
+        <meta charset="utf-8" />
+        <title>AI Pixel Art</title>
+        <style>
+          body {
+            margin: 0;
+            min-height: 100vh;
+            display: grid;
+            place-items: center;
+            background: #f8fafc;
+            color: #0f172a;
+            font-family: Arial, sans-serif;
+          }
+          main {
+            width: min(420px, calc(100vw - 48px));
+            border: 1px solid #dbe3ef;
+            border-radius: 8px;
+            background: white;
+            padding: 28px;
+            box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12);
+          }
+          h1 {
+            margin: 0 0 10px;
+            font-size: 26px;
+          }
+          p {
+            margin: 0;
+            color: #475569;
+            line-height: 1.5;
+          }
+        </style>
+      </head>
+      <body>
+        <main>
+          <h1>AI Pixel Art</h1>
+          <p>${message}</p>
+        </main>
+      </body>
+    </html>`;
+}
 
 function findFreePort(startPort = 3410) {
   return new Promise((resolve, reject) => {
@@ -61,6 +119,8 @@ async function startServer() {
   const serverRoot = path.join(appPath, ".next", "standalone");
   const serverEntry = path.join(serverRoot, "server.js");
 
+  log(`Starting server from ${serverEntry} on port ${port}`);
+
   serverProcess = spawn(process.execPath, [serverEntry], {
     cwd: serverRoot,
     env: {
@@ -70,11 +130,15 @@ async function startServer() {
       PORT: String(port),
       NODE_ENV: "production",
     },
-    stdio: "ignore",
+    stdio: ["ignore", "pipe", "pipe"],
     windowsHide: true,
   });
 
-  serverProcess.on("exit", () => {
+  serverProcess.stdout.on("data", (chunk) => log(chunk.toString().trim()));
+  serverProcess.stderr.on("data", (chunk) => log(chunk.toString().trim()));
+
+  serverProcess.on("exit", (code, signal) => {
+    log(`Server exited with code ${code ?? ""} signal ${signal ?? ""}`);
     serverProcess = null;
   });
 
@@ -84,8 +148,6 @@ async function startServer() {
 }
 
 async function createWindow() {
-  const url = await startServer();
-
   mainWindow = new BrowserWindow({
     width: 1320,
     height: 880,
@@ -100,12 +162,27 @@ async function createWindow() {
     },
   });
 
-  await mainWindow.loadURL(url);
+  await mainWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(loadingHtml("Starting the local canvas engine..."))}`);
+
+  try {
+    const url = await startServer();
+    log(`Loading ${url}`);
+    await mainWindow.loadURL(url);
+  } catch (error) {
+    log(`Startup failed: ${error.stack ?? error.message}`);
+    await mainWindow.loadURL(
+      `data:text/html;charset=utf-8,${encodeURIComponent(
+        loadingHtml(`Could not start the app. Close any old AI Pixel Art processes and try again. Log file: ${logPath}`),
+      )}`,
+    );
+  }
 }
 
 app.whenReady().then(() => {
+  logPath = path.join(app.getPath("userData"), "ai-pixel-art.log");
+  log("App ready");
   createWindow().catch((error) => {
-    dialog.showErrorBox("AI Pixel Art could not start", error.message);
+    log(`Window creation failed: ${error.stack ?? error.message}`);
     app.quit();
   });
 });

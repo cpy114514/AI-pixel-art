@@ -9,7 +9,7 @@
     "dev:clean": "node scripts/clean-next.mjs && next dev",
     "build": "next build",
     "build:electron": "next build && node scripts/prepare-electron-build.mjs",
-    "dist:win": "npm run build:electron && electron-builder --win portable",
+    "dist:win": "npm run build:electron && electron-builder --win nsis zip",
     "start": "next start",
     "lint": "eslint",
     "mcp:agent": "node scripts/ai-pixel-painter-mcp.mjs"
@@ -57,15 +57,25 @@
     "win": {
       "target": [
         {
-          "target": "portable",
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
           "arch": [
             "x64"
           ]
         }
       ]
     },
-    "portable": {
-      "artifactName": "AI-Pixel-Art-Windows-Portable.exe"
+    "artifactName": "AI-Pixel-Art-Windows-Compiled.${ext}",
+    "nsis": {
+      "artifactName": "AI-Pixel-Art-Windows-Setup.exe",
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true
     }
   }
 }
