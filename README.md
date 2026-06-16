@@ -6,13 +6,13 @@ You can generate pixel art image, edit the image and also make animation with AI
 
 ## Latest release:
 
-<https://github.com/cpy114514/AI-pixel-art/releases/tag/v1.0.2>
+<https://github.com/cpy114514/AI-pixel-art/releases/tag/v1.0.3>
 
 ## Set up on your PC
 
-1. Download and extract the last release
-2. On Windows, double-click `install.bat` the first time
-3. After install, double-click `AI Pixel Art.exe`
+1. Download `AI-Pixel-Art-Windows-Portable.exe` from the latest release
+2. Do not download the GitHub `Source code` zip
+3. Double-click the exe
 4. Insert your own api-key, highly recomand faster module
 5. try generate pixel art with AI
 

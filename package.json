@@ -2,11 +2,14 @@
   "name": "ai-pixel-painter",
   "version": "1.0.0",
   "description": "A pixel-art sprite editor for AI-generated JSON pixel data.",
+  "main": "electron/main.cjs",
   "scripts": {
     "browser": "node scripts/start-browser.mjs",
     "dev": "next dev",
     "dev:clean": "node scripts/clean-next.mjs && next dev",
     "build": "next build",
+    "build:electron": "next build && node scripts/prepare-electron-build.mjs",
+    "dist:win": "npm run build:electron && electron-builder --win portable",
     "start": "next start",
     "lint": "eslint",
     "mcp:agent": "node scripts/ai-pixel-painter-mcp.mjs"
@@ -30,11 +33,39 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "autoprefixer": "^10.5.0",
+    "electron": "^37.2.0",
+    "electron-builder": "^26.0.12",
     "eslint": "^9.39.4",
     "eslint-config-next": "^16.2.6",
     "postcss": "^8.5.14",
     "tailwindcss": "^3.4.17",
     "typescript": "^6.0.3",
     "zod": "^3.25.0"
+  },
+  "build": {
+    "appId": "com.aipixelart.app",
+    "productName": "AI Pixel Art",
+    "directories": {
+      "output": "dist-electron"
+    },
+    "asar": false,
+    "files": [
+      "electron/**/*",
+      ".next/standalone/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "portable": {
+      "artifactName": "AI-Pixel-Art-Windows-Portable.exe"
+    }
   }
 }
